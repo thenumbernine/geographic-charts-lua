@@ -1,6 +1,7 @@
 I am using these often enough that I'm putting them in their own library.
 
 Dependencies:
+- `lua-ext` - my lua ext library
 - `symmath` - my computer algebra system for differentiation for basis calculation.
 - `vec-ffi`
 - `imgui` (optional) = if you call a chart's "updateGUI" then it will need this.

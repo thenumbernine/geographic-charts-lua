@@ -15,6 +15,7 @@ so TODO change the calc_* stuff from r_θφ to h_φλ? idk ...
 --]]
 		
 -- using geographic labels: lat = φ, lon = λ
+local math = require 'ext.math'
 local vec3d = require 'vec-ffi.vec3d'
 local symmath = require 'symmath'
 -- input 

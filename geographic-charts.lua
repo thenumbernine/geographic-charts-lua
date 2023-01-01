@@ -25,7 +25,9 @@ local heightvar = symmath.var'height'
 -- expressions
 local latradval = latvar * symmath.pi / 180
 local lonradval = lonvar * symmath.pi / 180
-	
+
+local WGS84_a = 6378137	-- m ... earth equitorial radius
+
 local charts = {
 	(function()
 		local c = {}
@@ -33,7 +35,7 @@ local charts = {
 		c.name = 'WGS84'
 		
 		-- specific to WGS84:
-		c.a = 6378137	-- m ... earth equitorial radius
+		c.a = WGS84_a
 		c.b = 6356752.3142	-- m ... earth polar radius
 		-- ... wait, ellipses use 'a' as the major and 'b' as the minor
 		--   which would mean 'a' is the equatorial and 'b' is the polar
@@ -98,7 +100,7 @@ local charts = {
 				NPlusH * cosTheta * math.sin(phi),
 				(N * (1 - self.eccentricitySquared) + height) * sinTheta
 		end
-			
+		
 		-- x,y,z = meters
 		-- returns lat (degrees), lon (degrees), height (meters)
 		-- lat and lon has the same range as chart()
@@ -262,6 +264,8 @@ local charts = {
 
 		local c = {}
 		c.name = 'cylinder'
+		-- TODO multiply this by WGS84_a to put it in meters
+		-- but then update in geo-center-earth and seismograph-visualization
 		function c:chart(lat, lon, height)
 			return f(lat, lon, height)
 		end
@@ -296,7 +300,7 @@ local charts = {
 		-- results
 		local xval = Rvar * (lonradval - lambda0var) * symmath.cos(phi1var)
 		local yval = Rvar * (latradval - phi0var)
-		local zval = heightvar
+		local zval = heightvar / WGS84_a
 
 		local f = symmath.export.Lua:toFunc{
 			input = {
@@ -397,9 +401,9 @@ local charts = {
 					theta = theta - dtheta
 				end
 			end
-			mollweidex = self.R * math.sqrt(8) / math.pi * (lambda - self.lambda0) * math.cos(theta)
-			mollweidey = self.R * math.sqrt(2) * math.sin(theta)
-			mollweidez = height
+			local mollweidex = self.R * math.sqrt(8) / math.pi * (lambda - self.lambda0) * math.cos(theta)
+			local mollweidey = self.R * math.sqrt(2) * math.sin(theta)
+			local mollweidez = height
 			if not math.isfinite(mollweidex) then mollweidex = 0 end
 			if not math.isfinite(mollweidey) then mollweidey = 0 end
 			if not math.isfinite(mollweidez) then mollweidez = 0 end

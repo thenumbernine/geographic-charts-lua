@@ -14,3 +14,5 @@ Each chart contains:
 - chartInv(x, y, z) = returns lat, lon, height.  
 - basis(lat, lon, height) = returns a set of 3 `vec3d`'s the basis, probably orthonormal.  Lat and lon are in degrees, height is in meters.
 - updateGUI() = runs imgui update for modifying variables via gui.
+TODO:
+- chartGLSL = the code of the chart function, in GLSL, as a module (see modules library).

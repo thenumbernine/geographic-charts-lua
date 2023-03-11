@@ -128,6 +128,9 @@ void main() {
 	// height is in meters
 	// then generate texcoord etc
 	// based on constraints
+	//
+	// TODO FIXME one of the charts is NaN at the poles ...
+	// since this is a linear combination, that's making all charts nan at the poles.
 	vec3 pos = 0.
 <? for _,name in ipairs(chartNames) do
 ?>		+ weight_<?=name?> * chart_<?=name?>(vertex)
@@ -185,14 +188,10 @@ void main() {
 
 	// convert from lat,lon in degrees to unit texture coordinates
 	float lat = invpt.x;
-	float latrad = rad(lat);
-	float azimuthal = .5*M_PI - latrad;
-	float aziFrac = azimuthal / M_PI;
+	float aziFrac = (90. - lat) / 180.;
 
 	float lon = invpt.y;
-	float lonrad = rad(lon);
-	float lonFrac = lonrad / (2. * M_PI);
-	float unitLonFrac = lonFrac + .5;
+	float unitLonFrac = (lon + 180.) / 360.;
 
 	vec2 texcoordv = vec2(unitLonFrac, aziFrac);
 	fragColor = colorv * texture(colorTex, texcoordv);
@@ -277,6 +276,7 @@ function App:updateGUI()
 		self.view.orbit:set(0,0,0)
 		self.view.pos:set(0, 0, self.viewDist)
 	end
+	ig.luatableCheckbox('ortho', self.view, 'ortho')
 	ig.luatableInputInt('idivs', vars, 'idivs')
 	ig.luatableInputInt('jdivs', vars, 'jdivs')
 	ig.luatableSliderFloat('zeroLat', vars, 'zeroLat', -180, 180)

@@ -17,6 +17,10 @@ Each chart contains:
 TODO:
 - chartGLSL = the code of the chart function, in GLSL, as a module (see modules library).
 
+Ok I just went and added a bunch of charts to the GLSL code.
+Some of the Lua charts are in symmath, and that means I can procedurally generate them for GLSL.
+Would be nice to do this with all charts so I can put the chart in one place, generate Lua and GLSL, use diff to generate the basis, and do things like diff generate the Tissot indicators
+
 # Reference
 
 - earth pic is from NASA blue marble https://visibleearth.nasa.gov/collection/1484/blue-marble

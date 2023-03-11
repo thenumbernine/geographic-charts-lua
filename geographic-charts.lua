@@ -206,8 +206,10 @@ local charts = {
 	(function()
 		local c = {}
 		c.name = 'sphere'
+		
 		-- TODO this is in z-back 3D coords
 		-- it doesn't match code.lua's 2D z-up coords
+		
 		function c:chart(lat, lon, height)
 			local theta = math.rad(90 - lat)
 			local phi = math.rad(lon)

@@ -31,13 +31,29 @@ local function glget(k)
 end
 
 local chartNames = table{
+	-- 3D
 	'sphere',
 	'WGS84',
 	'cylinder',
+	-- 2D - rectangular
 	'Equirectangular',
-	'Azimuthal_equidistant',
-	'Lambert_Azimuthal_equal_area',
+	'Mercator',
+	'Gall_Peters',
+	'Lambert_cylindrical_equal_area',
+	-- 2D - rect-ellipse
+	'Kavrayskiy_VIII',
+	'Winkel_tripel',
+	-- 2D - ellipse
 	'Mollweide',
+	-- 2D - pinched ellipse
+	'Sinusoidal',
+	-- 2D - circle
+	'Azimuthal_equidistant',
+	'Lambert_azimuthal_equal_area',
+	'Weichel',
+	-- 2D - conic
+	'Albers',
+	'Bonne',
 }
 
 function App:initGL(...)
@@ -96,14 +112,15 @@ uniform mat4 projectionMatrix;
 <? end
 ?>
 
-uniform float zeroLat;
-uniform float zeroLon;
 
 in vec3 vertex;
 in vec4 color;
 
 out vec4 colorv;
-out vec2 texcoordv;
+
+//3D space point that's gonna be used for texturing
+// interpolate in 3D so we don't get weird artifats in the texcoord lookup where the texcoords wrap around
+out vec3 texcoordptv;	
 
 void main() {
 	// expect vertex xyz to be lat lon height
@@ -121,36 +138,68 @@ void main() {
 	colorv = color;
 
 	// ok here ... (lat, lon) to sphere
-	// then rotate sphere by zeroLat, zeroLon, and maybe a roll too?
-	// then back to lat, lon
-
-	float lat = vertex.x + zeroLat;
-	float latrad = rad(lat);
-	float azimuthal = .5*M_PI - latrad;
-	float aziFrac = azimuthal / M_PI;
-
-	float lon = vertex.y + zeroLon;
-	float lonrad = rad(lon);
-	float lonFrac = lonrad / (2. * M_PI);
-	float unitLonFrac = lonFrac + .5;
-
-	texcoordv = vec2(unitLonFrac, aziFrac);
+	texcoordptv = chart_sphere(vertex);
 }
 
 ]], 	{
 			allChartCode = allChartCode,
 			chartNames = chartNames,
 		}),
-		fragmentCode = [[
+		fragmentCode = template([[
 #version 460
+
+<?=allChartCode?>
+
 uniform sampler2D colorTex;
+
+uniform float zeroRoll;
+uniform float zeroLon;
+uniform float zeroLat;
+
 in vec4 colorv;
-in vec2 texcoordv;
+in vec3 texcoordptv;
+
 out vec4 fragColor;
+
+vec2 rot2D(vec2 x, float theta) {
+	float cth = cos(theta);
+	float sth = sin(theta);
+	return vec2(
+		cth * x.x - sth * x.y,
+		sth * x.x + cth * x.y
+	);
+}
+
 void main() {
+		
+	// then rotate sphere by zeroRoll, zeroLon, and maybe a roll too?
+	// then back to lat, lon
+	// idk what i'm doing
+	vec3 pt = texcoordptv;
+	pt.xy = rot2D(pt.xy, rad(zeroRoll));
+	pt.yz = rot2D(pt.yz, rad(zeroLon));
+	pt.xz = rot2D(pt.xz, rad(zeroLat));
+
+	// convert from 3D to lat,lon,heigth
+	vec3 invpt = chartInv_sphere(pt);
+
+	// convert from lat,lon in degrees to unit texture coordinates
+	float lat = invpt.x;
+	float latrad = rad(lat);
+	float azimuthal = .5*M_PI - latrad;
+	float aziFrac = azimuthal / M_PI;
+
+	float lon = invpt.y;
+	float lonrad = rad(lon);
+	float lonFrac = lonrad / (2. * M_PI);
+	float unitLonFrac = lonFrac + .5;
+
+	vec2 texcoordv = vec2(unitLonFrac, aziFrac);
 	fragColor = colorv * texture(colorTex, texcoordv);
 }
-]],
+]],		{
+			allChartCode = allChartCode,
+		}),
 		uniforms = {
 			colorTex = 0,
 		},
@@ -163,16 +212,20 @@ glreport'here'
 end
 
 
+local weightFields = chartNames:mapi(function(name)
+	return 'weight_'..name
+end)
 
 local vars = {
 	idivs = 100,
 	jdivs = 100,
 	normalizeWeights = true,
-	zeroLat = 0,
+	zeroRoll = 0,
 	zeroLon = 0,
+	zeroLat = 0,
 }
-for _,name in ipairs(chartNames) do
-	vars['weight_'..name] = name == 'Equirectangular' and 1 or 0
+for _,field in ipairs(weightFields) do
+	vars[field] = field == 'weight_Equirectangular' and 1 or 0
 end
 
 function App:update()
@@ -216,10 +269,6 @@ function App:update()
 glreport'here'
 end
 
-local weightFields = chartNames:mapi(function(name)
-	return 'weight_'..name
-end)
-
 function App:updateGUI()
 	if ig.igButton'reset view' then
 		self.view.ortho = true
@@ -230,8 +279,9 @@ function App:updateGUI()
 	end
 	ig.luatableInputInt('idivs', vars, 'idivs')
 	ig.luatableInputInt('jdivs', vars, 'jdivs')
-	ig.luatableSliderFloat('zeroLat', vars, 'zeroLat', -90, 90)
+	ig.luatableSliderFloat('zeroLat', vars, 'zeroLat', -180, 180)
 	ig.luatableSliderFloat('zeroLon', vars, 'zeroLon', -180, 180)
+	ig.luatableSliderFloat('zeroRoll', vars, 'zeroRoll', -180, 180)
 	ig.luatableCheckbox('normalize weights', vars, 'normalizeWeights')
 	local changed
 	for _,field in ipairs(weightFields) do
@@ -258,7 +308,5 @@ function App:updateGUI()
 		end
 	end
 end
-
-
 
 App():run()

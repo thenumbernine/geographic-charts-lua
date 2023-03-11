@@ -16,3 +16,7 @@ Each chart contains:
 - updateGUI() = runs imgui update for modifying variables via gui.
 TODO:
 - chartGLSL = the code of the chart function, in GLSL, as a module (see modules library).
+
+# Reference
+
+- earth pic is from NASA blue marbel

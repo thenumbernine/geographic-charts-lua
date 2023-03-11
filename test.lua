@@ -1,5 +1,6 @@
 #!/usr/bin/env luajit
 local ffi = require 'ffi'
+local template = require 'template'
 local table = require 'ext.table'
 local timer = require 'ext.timer'
 local gl = require 'gl'
@@ -12,9 +13,9 @@ local Image = require 'image'
 local matrix_ffi = require 'matrix.ffi'
 matrix_ffi.real = 'float'	-- default matrix_ffi type
 
-local charts = require 'geographic-charts'
 local allChartCode = require 'geographic-charts.code'
-local wgs84 = charts.WGS84
+-- TODO validate 'charts' fwd and inverse as well.
+--local charts = require 'geographic-charts'
 
 local App = require 'imguiapp.withorbit'()
 
@@ -28,6 +29,16 @@ local function glget(k)
 	gl.glGetIntegerv(assert(gl[k]), int);
 	return int[0]
 end
+
+local chartNames = table{
+	'sphere',
+	'WGS84',
+	'cylinder',
+	'Equirectangular',
+	'Azimuthal_equidistant',
+	'Lambert_Azimuthal_equal_area',
+	'Mollweide',
+}
 
 function App:initGL(...)
 	App.super.initGL(self, ...)
@@ -72,18 +83,21 @@ glreport'here'
 	self.projectionMatrix = matrix_ffi.zeros{4,4}
 
 	self.globeTexShader = GLProgram{
-		vertexCode = table{
-'#version 460',
-allChartCode,
-[[
+		vertexCode = template([[
+#version 460
+
+<?=allChartCode?>
+
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
 
-uniform float weight_WGS84;
-uniform float weight_cylinder;
-uniform float weight_Equirectangular;
-uniform float weight_Azimuthal_equidistant;
-uniform float weight_Mollweide;
+<? for _,name in ipairs(chartNames) do
+?>uniform float weight_<?=name?>;
+<? end
+?>
+
+uniform float zeroLat;
+uniform float zeroLon;
 
 in vec3 vertex;
 in vec4 color;
@@ -93,31 +107,40 @@ out vec2 texcoordv;
 
 void main() {
 	// expect vertex xyz to be lat lon height
+	// lat and lon is in degrees
+	// height is in meters
 	// then generate texcoord etc
 	// based on constraints
-	vec3 pos = weight_WGS84 * chart_WGS84(vertex)
-			+ weight_cylinder * chart_cylinder(vertex)
-			+ weight_Equirectangular * chart_Equirectangular(vertex)
-			+ weight_Azimuthal_equidistant * chart_Azimuthal_equidistant(vertex)
-			+ weight_Mollweide * chart_Mollweide(vertex);
+	vec3 pos = 0.
+<? for _,name in ipairs(chartNames) do
+?>		+ weight_<?=name?> * chart_<?=name?>(vertex)
+<? end
+?>	;
 
 	gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.));
 	colorv = color;
 
-	float lat = vertex.x;
+	// ok here ... (lat, lon) to sphere
+	// then rotate sphere by zeroLat, zeroLon, and maybe a roll too?
+	// then back to lat, lon
+
+	float lat = vertex.x + zeroLat;
 	float latrad = rad(lat);
 	float azimuthal = .5*M_PI - latrad;
 	float aziFrac = azimuthal / M_PI;
 
-	float lon = vertex.y;
+	float lon = vertex.y + zeroLon;
 	float lonrad = rad(lon);
 	float lonFrac = lonrad / (2. * M_PI);
 	float unitLonFrac = lonFrac + .5;
 
 	texcoordv = vec2(unitLonFrac, aziFrac);
 }
-]]
-}:concat'\n',
+
+]], 	{
+			allChartCode = allChartCode,
+			chartNames = chartNames,
+		}),
 		fragmentCode = [[
 #version 460
 uniform sampler2D colorTex;
@@ -141,14 +164,16 @@ end
 
 
 
-idivs = 100
-jdivs = 100
-normalizeWeights = true
-spheroidCoeff = 0
-cylCoeff = 0
-equirectCoeff = 1
-aziequiCoeff = 0
-mollweideCoeff = 0
+local vars = {
+	idivs = 100,
+	jdivs = 100,
+	normalizeWeights = true,
+	zeroLat = 0,
+	zeroLon = 0,
+}
+for _,name in ipairs(chartNames) do
+	vars['weight_'..name] = name == 'Equirectangular' and 1 or 0
+end
 
 function App:update()
 	gl.glClearColor(0, 0, 0, 1)
@@ -156,32 +181,26 @@ function App:update()
 	gl.glGetFloatv(gl.GL_MODELVIEW_MATRIX, self.modelViewMatrix.ptr)
 	gl.glGetFloatv(gl.GL_PROJECTION_MATRIX, self.projectionMatrix.ptr)
 	self.globeTexShader:use()
-	self.globeTexShader:setUniforms{
-		weight_WGS84 = spheroidCoeff,
-		weight_cylinder = cylCoeff,
-		weight_Equirectangular = equirectCoeff,
-		weight_Azimuthal_equidistant = aziequiCoeff,
-		weight_Mollweide = mollweideCoeff,
-		modelViewMatrix = self.modelViewMatrix.ptr,
-		projectionMatrix = self.projectionMatrix.ptr,
-	}
+	self.globeTexShader:setUniforms(vars)
+	self.globeTexShader:setUniform('modelViewMatrix', self.modelViewMatrix.ptr)
+	self.globeTexShader:setUniform('projectionMatrix', self.projectionMatrix.ptr)
 	self.colorTex:bind()
 	gl.glVertexAttrib4f(self.globeTexShader.attrs.color.loc, 1, 1, 1, 1)
-	for j=0,jdivs-1 do
+	for j=0,vars.jdivs-1 do
 		gl.glBegin(gl.GL_TRIANGLE_STRIP)
-		for i=0,idivs do
-			local aziFrac = i/idivs
+		for i=0,vars.idivs do
+			local aziFrac = i/vars.idivs
 			local azimuthal = aziFrac * math.pi-- azimuthal angle
 			local latrad = .5*math.pi - azimuthal	-- latitude
 			local lat = math.deg(latrad)
 
-			local unitLonFrac = (j+1)/jdivs
+			local unitLonFrac = (j+1)/vars.jdivs
 			local lonFrac = unitLonFrac - .5
 			local lonrad = lonFrac * 2 * math.pi			-- longitude
 			local lon = math.deg(lonrad)
 			gl.glVertexAttrib3f(self.globeTexShader.attrs.vertex.loc, lat, lon, 0)
 
-			local unitLonFrac = j/jdivs
+			local unitLonFrac = j/vars.jdivs
 			local lonFrac = unitLonFrac - .5
 			local lonrad = lonFrac * 2 * math.pi			-- longitude
 			local lon = math.deg(lonrad)
@@ -197,15 +216,9 @@ function App:update()
 glreport'here'
 end
 
-
-
-local weightFields = {
-	'spheroidCoeff',
-	'cylCoeff',
-	'equirectCoeff',
-	'aziequiCoeff',
-	'mollweideCoeff',
-}
+local weightFields = chartNames:mapi(function(name)
+	return 'weight_'..name
+end)
 
 function App:updateGUI()
 	if ig.igButton'reset view' then
@@ -215,29 +228,31 @@ function App:updateGUI()
 		self.view.orbit:set(0,0,0)
 		self.view.pos:set(0, 0, self.viewDist)
 	end
-	ig.luatableInputInt('idivs', _G, 'idivs')
-	ig.luatableInputInt('jdivs', _G, 'jdivs')
-	ig.luatableCheckbox('normalize weights', _G, 'normalizeWeights')
+	ig.luatableInputInt('idivs', vars, 'idivs')
+	ig.luatableInputInt('jdivs', vars, 'jdivs')
+	ig.luatableSliderFloat('zeroLat', vars, 'zeroLat', -90, 90)
+	ig.luatableSliderFloat('zeroLon', vars, 'zeroLon', -180, 180)
+	ig.luatableCheckbox('normalize weights', vars, 'normalizeWeights')
 	local changed
 	for _,field in ipairs(weightFields) do
-		if ig.luatableSliderFloat(field, _G, field, 0, 1) then
+		if ig.luatableSliderFloat(field, vars, field, 0, 1) then
 			changed = field
 		end
 	end
-	if normalizeWeights and changed then
-		local restFrac = 1 - _G[changed]
+	if vars.normalizeWeights and changed then
+		local restFrac = 1 - vars[changed]
 		local totalRest = 0
 		for _,field in ipairs(weightFields) do
 			if field ~= changed then
-				totalRest = totalRest + _G[field]
+				totalRest = totalRest + vars[field]
 			end
 		end
 		for _,field in ipairs(weightFields) do
 			if field ~= changed then
 				if totalRest == 0 then
-					_G[field] = 0
+					vars[field] = 0
 				else
-					_G[field] = restFrac * _G[field] / totalRest
+					vars[field] = restFrac * vars[field] / totalRest
 				end
 			end
 		end

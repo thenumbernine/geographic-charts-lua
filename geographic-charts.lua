@@ -206,6 +206,8 @@ local charts = {
 	(function()
 		local c = {}
 		c.name = 'sphere'
+		-- TODO this is in z-back 3D coords
+		-- it doesn't match code.lua's 2D z-up coords
 		function c:chart(lat, lon, height)
 			local theta = math.rad(90 - lat)
 			local phi = math.rad(lon)
@@ -217,7 +219,7 @@ local charts = {
 		function c:chartInv(x, y, z)
 			local r = math.sqrt(x*x + y*y + z*z)
 			local phi = math.atan2(y, x)
-			local r2 = math.sqrt(x*x + y*y);
+			local r2 = math.sqrt(x*x + y*y)
 			local theta = math.atan(r2 / z)
 			local height = r - 1
 			return
@@ -340,8 +342,8 @@ local charts = {
 		local azimuthalval = symmath.pi / 2 - latradval
 		
 		-- results
-		local xval = -symmath.sin(lonradval + symmath.pi) * azimuthalval
-		local yval = symmath.cos(lonradval + symmath.pi) * azimuthalval
+		local xval = symmath.sin(lonradval) * azimuthalval
+		local yval = -symmath.cos(lonradval) * azimuthalval
 		local zval = heightvar
 	
 		local f = symmath.export.Lua:toFunc{

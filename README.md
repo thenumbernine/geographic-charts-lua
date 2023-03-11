@@ -19,4 +19,4 @@ TODO:
 
 # Reference
 
-- earth pic is from NASA blue marbel
+- earth pic is from NASA blue marble https://visibleearth.nasa.gov/collection/1484/blue-marble

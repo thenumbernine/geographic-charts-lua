@@ -78,13 +78,7 @@ const float WGS84_a = 6378137.;		// equatorial radius
 //// MODULE_NAME: chart_sphere
 //// MODULE_DEPENDS: M_PI rad WGS84_a xformZBackToZUp
 
-vec3 chart_sphere(vec3 latLonHeight) {
-<?=symmath.export.C:toCode{
-	input = charts.sphere.exprIn,
-	output = charts.sphere.exprOut,
-}?>
-	return xformZBackToZUp(vec3(out1, out2, out3));
-}
+<?=charts.sphere:getGLSLFunc3D()?>
 
 //// MODULE_DEPENDS: xformZUpToZBack deg
 
@@ -143,25 +137,9 @@ vec3 chart_WGS84(vec3 x) {
 }
 
 //// MODULE_NAME: chart_cylinder
-//// MODULE_DEPENDS: perp2 rad WGS84_a
+//// MODULE_DEPENDS: perp2 rad WGS84_a xformZBackToZUp
 
-vec3 chart_cylinder(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	float lonrad = rad(lon);
-	float r = WGS84_a + height;
-	float x = r * cos(lonrad);
-	float y = r * sin(lonrad);
-	float z = r * latrad;
-	vec3 cartpos = vec3(x, y, z);
-	// end of geographic-charts, beginning of vis aligning stuff
-	cartpos /= WGS84_a;
-	cartpos.yz = -perp2(cartpos.yz);	//rotate back so cartpos is up
-	cartpos.xz = perp2(cartpos.xz);		//now rotate so prime meridian is along -z instead of +x
-	return cartpos;
-}
+<?=charts.cylinder:getGLSLFunc3D()?>
 
 //// MODULE_NAME: chart_Equirectangular
 //// MODULE_DEPENDS: M_PI rad WGS84_a
@@ -237,21 +215,9 @@ vec3 chart_Lambert_cylindrical_equal_area(vec3 latLonHeight) {
 //// MODULE_NAME: chart_Azimuthal_equidistant 
 //// MODULE_DEPENDS: M_PI M_SQRT_2 rad WGS84_a
 
-const float Azimuthal_equidistant_R = M_SQRT_2;
-vec3 chart_Azimuthal_equidistant(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float lonrad = rad(lon);
-	float colat = 90. - lat;		//[N,S] => [0,180]
-	float azimuthal = colat / 180.;	//[N,S] => [0,1]
-	azimuthal *= Azimuthal_equidistant_R;
-	float x = sin(lonrad) * azimuthal;
-	float y = -cos(lonrad) * azimuthal;
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
-	
+const float Azimuthal_equidistant_R = <?=charts['Azimuthal equidistant'].R?>;
+<?=charts['Azimuthal equidistant']:getGLSLFunc()?>
+
 //// MODULE_NAME: chart_Lambert_azimuthal_equal_area
 //// MODULE_DEPENDS: M_PI M_SQRT_2 rad
 

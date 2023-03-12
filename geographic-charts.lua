@@ -45,27 +45,101 @@ end
 
 local Chart = class()
 
-Chart.guiVarValues = {}
-
-function Chart:chart(lat, lon, height)
-	return self.chartFunc(lat, lon, height, 
-		getfields(self, table.unpack(self.guiVarValues))
-	)
+-- call this to build numeric fields of each name
+-- and to build chart.vars with its fields in-order matching ...
+function Chart:buildVars(varkvs)
+	self.varnames = table()
+	self.vars = {}	-- index by name
+	self.varlist = table()	-- index sequence
+	for i,kv in ipairs(varkvs or {}) do
+		local k, v = next(kv)
+		self.varnames[i] = k
+		local var = symmath.var(k) 
+		self.vars[k] = var
+		self.varlist[i] = var
+		self[k] = v
+	end
 end
 
 -- static method for building code
 -- run this Chart:buildFunc()
 -- this assigns chart.guiVars, chart.exprOut
 -- then it builds chart.exprIn as a concatenation of {latvar,lonvar,heightvar} and whatever is in chart.guiVars
-function Chart:buildFunc(args)
-	self.guiVars = args.guiVars
-	self.exprOut = args.exprOut
-	self.exprIn = table{latvar, lonvar, heightvar}:append(self.guiVars or {})
-	return symmath.export.Lua:toFunc{
+function Chart:buildFunc(exprOut)
+	self.exprOut = exprOut
+	self.exprIn = table{latvar, lonvar, heightvar}
+		:append(self.varlist or {})
+	
+	self.chartFunc = symmath.export.Lua:toFunc{
+		input = self.exprIn,
+		output = self.exprOut,
+	}
+
+	local y = symmath.Array(table.unpack(self.exprOut))
+	self.basisExprs = table{latvar, lonvar, heightvar}:mapi(function(x)
+		return y:diff(x)()
+	end)
+	self.basisNormExprs = self.basisExprs:mapi(function(dy_dx)
+		local len = symmath.sqrt(
+			dy_dx[1]^2
+			+ dy_dx[2]^2
+			+ dy_dx[3]^2
+		)
+		return (dy_dx / len)()
+	end)
+	self.basisFunc = symmath.export.Lua:toFunc{
+		input = self.exprIn,
+		output = self.basisNormExprs,
+	}
+end
+
+-- be sure to define your `var:nameForExporter('C', ...)` beforehand
+function Chart:getGLSLBody()
+	return symmath.export.C:toCode{
 		input = self.exprIn,
 		output = self.exprOut,
 	}
 end
+
+function Chart:getGLSLFunc()
+	return table{
+		'vec3 chart_'..self.name:gsub(' ', '_')..'(vec3 latLonHeight) {',
+		self:getGLSLBody(),
+		'	return vec3(out1, out2, out3);',
+		'}',
+	}:concat'\n'
+end
+
+-- the '3D' indicates to be sure to insert a `xformZBackToZUp(pt)` last
+function Chart:getGLSLFunc3D()
+	return table{
+		'vec3 chart_'..self.name:gsub(' ', '_')..'(vec3 latLonHeight) {',
+		self:getGLSLBody(),
+		'	return xformZBackToZUp(vec3(out1, out2, out3));',
+		'}',
+	}:concat'\n'
+end
+
+function Chart:chart(lat, lon, height)
+	return self.chartFunc(lat, lon, height, getfields(self, table.unpack(self.varnames)))
+end
+
+-- TODO don't forget that GLSL is swapping the z-back for z-up
+-- TODO for a few of these (sphere, cylinder, etc) multiply the output by WGS84_a to put it in meters
+function Chart:basis(lat, lon, height)
+	local x,y,z = self.basisFunc(lat, lon, height, getfields(self, table.unpack(self.varnames)))
+	return vec3d(table.unpack(x)),
+			vec3d(table.unpack(y)),
+			vec3d(table.unpack(z))
+end
+
+function Chart:updateGUI()
+	local ig = require 'imgui'
+	for _,n in ipairs(self.varnames) do
+		ig.luatableInputFloat(n, self, n)
+	end
+end
+
 
 local charts = {
 	(function()
@@ -246,23 +320,20 @@ local charts = {
 		local c = class(Chart)
 		c.name = 'sphere'
 		
-		c.guiVarValues = {'R'}	-- what fields to read from 'chart' for numerical calculations
-		c.R = WGS84_a
-
-		local Rvar = symmath.var'R'
-		Rvar:nameForExporter('C', 'WGS84_a')	-- this is the GLSL name
-		local rval = heightvar / Rvar + 1
+		c:buildVars{
+			{R = WGS84_a},	-- what fields to read from 'chart' for numerical calculations
+		}
+		c.vars.R:nameForExporter('C', 'WGS84_a')	-- this is the GLSL name
+		
+		local rval = heightvar / c.vars.R + 1
 		local thetaval = symmath.pi/2 - latradval
-
-		c.chartFunc = c:buildFunc{
-			exprOut = {
-				-- TODO this is in z-back 3D coords?
-				-- it doesn't match code.lua's 2D z-up coords
-				rval * symmath.sin(thetaval) * symmath.cos(lonradval),
-				rval * symmath.sin(thetaval) * symmath.sin(lonradval),
-				rval * symmath.cos(thetaval),
-			},
-			guiVars = {Rvar},
+		
+		-- TODO this is in z-back 3D coords?
+		-- it doesn't match code.lua's 2D z-up coords
+		c:buildFunc{
+			rval * symmath.sin(thetaval) * symmath.cos(lonradval),
+			rval * symmath.sin(thetaval) * symmath.sin(lonradval),
+			rval * symmath.cos(thetaval),
 		}
 
 		function c:chartInv(x, y, z)
@@ -276,61 +347,25 @@ local charts = {
 				(math.deg(phi) + 180) % 360 - 180,
 				height
 		end
-		function c:basis(lat, lon, height)
-			-- TODO diff self.exprOut by latvar, lonvar, heightvar
-			-- (make sure exprOut is an symmath.Array for vector operations)
-			local theta = math.rad(90 - lat)
-			local phi = math.rad(lon)
-			local r = 1 + height
-			return vec3d(
-				math.sin(theta) * math.cos(phi),
-				math.sin(theta) * math.sin(phi),
-				math.cos(theta)
-			), vec3d(
-				math.cos(theta) * math.cos(phi),
-				math.cos(theta) * math.sin(phi),
-				-math.sin(theta)
-			), vec3d(
-				-math.sin(phi),
-				math.cos(phi),
-				0
-			)
-		end
+		
 		return c
 	end)(),
 	
 	(function()
-		local rval = heightvar + 1
-		-- results
-		local xval = rval * symmath.cos(lonradval)
-		local yval = rval * symmath.sin(lonradval)
-		local zval = rval * latradval
+		local c = class(Chart)
+		c.name = 'cylinder'
 
-		local f = symmath.export.Lua:toFunc{
-			input = {
-				-- args
-				latvar, lonvar, heightvar,
-				-- gui vars
-			},
-			output = {xval, yval, zval},
+		c:buildVars{
+			{R = WGS84_a},
+		}
+		c.vars.R:nameForExporter('C', 'WGS84_a')	-- this is the GLSL name
+		local rval = heightvar / c.vars.R + 1
+		c:buildFunc{
+			rval * symmath.cos(lonradval),
+			rval * symmath.sin(lonradval),
+			rval * latradval,
 		}
 
-		local c = {}
-		c.name = 'cylinder'
-		-- TODO multiply this by WGS84_a to put it in meters
-		-- but then update in geo-center-earth and seismograph-visualization
-		function c:chart(lat, lon, height)
-			return f(lat, lon, height)
-		end
-		function c:basis(lat, lon, height)
-			local lonradval = math.rad(lon)
-			local c = math.cos(lonradval)
-			local s = math.sin(lonradval)
-			return 
-				vec3d(0,0,1),
-				vec3d(-s, c, 0),
-				vec3d(c, s, 0)
-		end
 		-- TODO c:chartInv
 		return c
 	end)(),
@@ -338,81 +373,33 @@ local charts = {
 	(function()
 		local c = class(Chart)
 		c.name = 'Equirectangular'
-		
-		-- gui vars
-		c.R = 2 / math.pi
-		c.lambda0 = 0
-		c.phi0 = 0
-		c.phi1 = 0
-		-- symmath vars equivalent
-		local Rvar = symmath.var'R'
-		local lambda0var = symmath.var'lambda0'
-		local phi0var = symmath.var'phi0'
-		local phi1var = symmath.var'phi1'
-
-		-- results
-		c.guiVarValues = {'R', 'lambda0', 'phi0', 'phi1'}
-		c.chartFunc = c:buildFunc{
-			exprOut = {
-				Rvar * (lonradval - lambda0var) * symmath.cos(phi1var),
-				Rvar * (latradval - phi0var),
-				heightvar / WGS84_a,
-			},
-			guiVars = {Rvar, lambda0var, phi0var, phi1var},
+		c:buildVars{
+			{R = 2/math.pi},
+			{lambda0 = 0},
+			{phi0 = 0},
+			{phi1 = 0},
 		}
-		
-		function c:updateGUI()
-			local ig = require 'imgui'
-			ig.luatableInputFloat('R', self, 'R')
-			ig.luatableInputFloat('lambda0', self, 'lambda0')
-			ig.luatableInputFloat('phi0', self, 'phi0')
-			ig.luatableInputFloat('phi1', self, 'phi1')
-		end
-
-		function c:basis(lat, lon, height)
-			-- Bx is north, By is east, Bz is down ... smh
-			return
-				vec3d(0, 1, 0),
-				vec3d(1, 0, 0),
-				vec3d(0, 0, -1)
-		end
-
+		c:buildFunc{
+			c.vars.R * (lonradval - c.vars.lambda0) * symmath.cos(c.vars.phi1),
+			c.vars.R * (latradval - c.vars.phi0),
+			heightvar / WGS84_a,	-- really tempting to just make all charts -- even the 2D ones -- in meters.
+		}
 		return c
 	end)(),
 
 	(function()
-		local azimuthalval = symmath.pi / 2 - latradval
-		
-		-- results
-		local xval = symmath.sin(lonradval) * azimuthalval
-		local yval = -symmath.cos(lonradval) * azimuthalval
-		local zval = heightvar
-	
-		local f = symmath.export.Lua:toFunc{
-			input = {
-				-- args
-				latvar, lonvar, heightvar,
-				-- gui vars
-			},
-			output = {xval, yval, zval},
-		}
-
-		local c = {}
+		local c = class(Chart)
 		c.name = 'Azimuthal equidistant'
-		
-		function c:chart(lat, lon, height)
-			return f(lat, lon, height)
-		end
-	
-		function c:basis(lat, lon, height)
-			local cosLambda = math.cos(math.rad(lon))
-			local sinLambda = math.sin(math.rad(lon))
-			return
-				vec3d(-cosLambda, -sinLambda, 0),	-- d/dphi
-				vec3d(-sinLambda, cosLambda, 0),	-- d/dlambda
-				vec3d(0, 0, -1)						-- d/dheight
-		end
-
+		c:buildVars{
+			{R = math.sqrt(.5)},
+		}
+		c.vars.R:nameForExporter('C', 'Azimuthal_equidistant_R')
+		local azimuthalval = c.vars.R * (1 - latvar / 90)
+		c:buildFunc{
+			symmath.sin(lonradval) * azimuthalval,
+			-symmath.cos(lonradval) * azimuthalval,
+			heightvar / WGS84_a,
+		}
 		return c
 	end)(),
 

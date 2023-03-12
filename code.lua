@@ -14,6 +14,12 @@ local ModuleSet = require 'modules'
 local modules = ModuleSet()
 
 modules:addFromMarkup(template[[
+<?
+local symmath = require 'symmath'
+symmath.export.C.numberType = 'float'	-- hmm ... nice to be an arg ...
+local charts = require 'geographic-charts'
+?>
+
 //// MODULE_NAME: M_PI
 const float M_PI = <?=math.pi?>;
 
@@ -35,8 +41,29 @@ float deg(float d) {
 }
 
 //// MODULE_NAME: perp2
+
 vec2 perp2(vec2 a) {
 	return vec2(-a.y, a.x);
+}
+
+//// MODULE_NAME: xformZBackToZUp
+//// MODULE_DEPENDS: perp2
+
+vec3 xformZBackToZUp(vec3 pt) {
+	//convert from z-towards-user (3D) to z-up (2D)
+	pt.yz = -perp2(pt.yz);		//rotate back so pt is up
+	pt.xz = perp2(pt.xz);		//now rotate so prime meridian is along -z instead of +x
+	return pt;
+}
+
+//// MODULE_NAME: xformZUpToZBack
+//// MODULE_DEPENDS: perp2
+
+vec3 xformZUpToZBack(vec3 pt) {
+	// convert from z-up 2D to z-towards-user 3D
+	pt.xz = -perp2(pt.xz);
+	pt.yz = perp2(pt.yz);
+	return pt;
 }
 
 //// MODULE_NAME: isfinite
@@ -49,42 +76,25 @@ bool isfinite(float x) {
 const float WGS84_a = 6378137.;		// equatorial radius
 
 //// MODULE_NAME: chart_sphere
-//// MODULE_DEPENDS: M_PI rad WGS84_a
+//// MODULE_DEPENDS: M_PI rad WGS84_a xformZBackToZUp
 
 vec3 chart_sphere(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float theta = rad(90. - lat);
-	float phi = rad(lon);
-	float r = 1. + height / WGS84_a;
-	float sinth = sin(theta);
-	vec3 pt = r * vec3(
-		sinth * cos(phi),
-		sinth * sin(phi),
-		cos(theta)
-	);
-	//convert from z-towards-user (3D) to z-up (2D)
-	pt.yz = -perp2(pt.yz);	//rotate back so pt is up
-	pt.xz = perp2(pt.xz);		//now rotate so prime meridian is along -z instead of +x
-	return pt;
+<?=symmath.export.C:toCode{
+	input = charts.sphere.exprIn,
+	output = charts.sphere.exprOut,
+}?>
+	return xformZBackToZUp(vec3(out1, out2, out3));
 }
 
-//// MODULE_DEPENDS: deg
+//// MODULE_DEPENDS: xformZUpToZBack deg
 
 vec3 chartInv_sphere(vec3 pt) {
-	// convert from z-up 2D to z-towards-user 3D
-	pt.xz = -perp2(pt.xz);
-	pt.yz = perp2(pt.yz);
+	pt = xformZUpToZBack(pt);
 	float r = length(pt);
-	float phi = atan(pt.y, pt.x);	//atan2
-	float r2 = length(pt.xy);
-	float theta = atan(pt.z, r2);
+	float lonrad = atan(pt.y, pt.x);
+	float latrad = atan(pt.z, length(pt.xy));
 	float height = (r - 1.) * WGS84_a;
-	return vec3(
-		deg(theta),
-		deg(phi),
-		height);
+	return vec3(deg(latrad), deg(lonrad), height);
 }
 
 //// MODULE_NAME: chart_WGS84

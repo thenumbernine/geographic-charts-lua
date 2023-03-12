@@ -22,6 +22,10 @@ local symmath = require 'symmath'
 local latvar = symmath.var'lat'
 local lonvar = symmath.var'lon'
 local heightvar = symmath.var'height'
+-- GLSL-specific, to accept (lat,lon,height) as a vec3
+latvar:nameForExporter('C', 'latLonHeight.x')
+lonvar:nameForExporter('C', 'latLonHeight.y')
+heightvar:nameForExporter('C', 'latLonHeight.z')
 -- expressions
 local latradval = latvar * symmath.pi / 180
 local lonradval = lonvar * symmath.pi / 180
@@ -204,19 +208,29 @@ local charts = {
 	end)(),
 
 	(function()
+		local Rvar = symmath.var'R'
+		Rvar:nameForExporter('C', 'WGS84_a')	-- this is the GLSL name
+		local rval = heightvar / Rvar + 1
+		local thetaval = symmath.pi/2 - latradval
+		local xval = rval * symmath.sin(thetaval) * symmath.cos(lonradval)
+		local yval = rval * symmath.sin(thetaval) * symmath.sin(lonradval)
+		local zval = rval * symmath.cos(thetaval)
+
 		local c = {}
 		c.name = 'sphere'
-		
+		c.R = WGS84_a
+		c.exprIn = {latvar, lonvar, heightvar, Rvar}	-- TODO append guivars ... like radius, subsets of lat lon, etc
+		c.exprOut = {xval, yval, zval}
+
+		local f = symmath.export.Lua:toFunc{
+			input = c.exprIn,
+			output = c.exprOut,
+		}
+
 		-- TODO this is in z-back 3D coords
 		-- it doesn't match code.lua's 2D z-up coords
-		
 		function c:chart(lat, lon, height)
-			local theta = math.rad(90 - lat)
-			local phi = math.rad(lon)
-			local r = 1 + height
-			return 	r * math.sin(theta) * math.cos(phi),
-					r * math.sin(theta) * math.sin(phi),
-					r * math.cos(theta)
+			return f(lat, lon, height, self.R)
 		end
 		function c:chartInv(x, y, z)
 			local r = math.sqrt(x*x + y*y + z*z)
@@ -230,6 +244,8 @@ local charts = {
 				height
 		end
 		function c:basis(lat, lon, height)
+			-- TODO diff self.exprOut by latvar, lonvar, heightvar
+			-- (make sure exprOut is an symmath.Array for vector operations)
 			local theta = math.rad(90 - lat)
 			local phi = math.rad(lon)
 			local r = 1 + height

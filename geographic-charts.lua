@@ -15,9 +15,12 @@ so TODO change the calc_* stuff from r_θφ to h_φλ? idk ...
 --]]
 		
 -- using geographic labels: lat = φ, lon = λ
+local table = require 'ext.table'
+local class = require 'ext.class'
 local math = require 'ext.math'
 local vec3d = require 'vec-ffi.vec3d'
 local symmath = require 'symmath'
+
 -- input 
 local latvar = symmath.var'lat'
 local lonvar = symmath.var'lon'
@@ -31,6 +34,38 @@ local latradval = latvar * symmath.pi / 180
 local lonradval = lonvar * symmath.pi / 180
 
 local WGS84_a = 6378137	-- m ... earth equitorial radius
+
+
+-- tail-call transform list of fields into their values within 't'
+local function getfields(t, ...)
+	if select('#', ...) == 0 then return end
+	local f = ...
+	return t[f], getfields(t, select(2, ...))
+end
+
+local Chart = class()
+
+Chart.guiVarValues = {}
+
+function Chart:chart(lat, lon, height)
+	return self.chartFunc(lat, lon, height, 
+		getfields(self, table.unpack(self.guiVarValues))
+	)
+end
+
+-- static method for building code
+-- run this Chart:buildFunc()
+-- this assigns chart.guiVars, chart.exprOut
+-- then it builds chart.exprIn as a concatenation of {latvar,lonvar,heightvar} and whatever is in chart.guiVars
+function Chart:buildFunc(args)
+	self.guiVars = args.guiVars
+	self.exprOut = args.exprOut
+	self.exprIn = table{latvar, lonvar, heightvar}:append(self.guiVars or {})
+	return symmath.export.Lua:toFunc{
+		input = self.exprIn,
+		output = self.exprOut,
+	}
+end
 
 local charts = {
 	(function()
@@ -208,30 +243,28 @@ local charts = {
 	end)(),
 
 	(function()
+		local c = class(Chart)
+		c.name = 'sphere'
+		
+		c.guiVarValues = {'R'}	-- what fields to read from 'chart' for numerical calculations
+		c.R = WGS84_a
+
 		local Rvar = symmath.var'R'
 		Rvar:nameForExporter('C', 'WGS84_a')	-- this is the GLSL name
 		local rval = heightvar / Rvar + 1
 		local thetaval = symmath.pi/2 - latradval
-		local xval = rval * symmath.sin(thetaval) * symmath.cos(lonradval)
-		local yval = rval * symmath.sin(thetaval) * symmath.sin(lonradval)
-		local zval = rval * symmath.cos(thetaval)
 
-		local c = {}
-		c.name = 'sphere'
-		c.R = WGS84_a
-		c.exprIn = {latvar, lonvar, heightvar, Rvar}	-- TODO append guivars ... like radius, subsets of lat lon, etc
-		c.exprOut = {xval, yval, zval}
-
-		local f = symmath.export.Lua:toFunc{
-			input = c.exprIn,
-			output = c.exprOut,
+		c.chartFunc = c:buildFunc{
+			exprOut = {
+				-- TODO this is in z-back 3D coords?
+				-- it doesn't match code.lua's 2D z-up coords
+				rval * symmath.sin(thetaval) * symmath.cos(lonradval),
+				rval * symmath.sin(thetaval) * symmath.sin(lonradval),
+				rval * symmath.cos(thetaval),
+			},
+			guiVars = {Rvar},
 		}
 
-		-- TODO this is in z-back 3D coords
-		-- it doesn't match code.lua's 2D z-up coords
-		function c:chart(lat, lon, height)
-			return f(lat, lon, height, self.R)
-		end
 		function c:chartInv(x, y, z)
 			local r = math.sqrt(x*x + y*y + z*z)
 			local phi = math.atan2(y, x)
@@ -303,7 +336,7 @@ local charts = {
 	end)(),
 
 	(function()
-		local c = {}
+		local c = class(Chart)
 		c.name = 'Equirectangular'
 		
 		-- gui vars
@@ -318,24 +351,15 @@ local charts = {
 		local phi1var = symmath.var'phi1'
 
 		-- results
-		local xval = Rvar * (lonradval - lambda0var) * symmath.cos(phi1var)
-		local yval = Rvar * (latradval - phi0var)
-		local zval = heightvar / WGS84_a
-
-		local f = symmath.export.Lua:toFunc{
-			input = {
-				-- args
-				latvar, lonvar, heightvar,
-				-- gui vars
-				Rvar, lambda0var, phi0var, phi1var,
+		c.guiVarValues = {'R', 'lambda0', 'phi0', 'phi1'}
+		c.chartFunc = c:buildFunc{
+			exprOut = {
+				Rvar * (lonradval - lambda0var) * symmath.cos(phi1var),
+				Rvar * (latradval - phi0var),
+				heightvar / WGS84_a,
 			},
-			output = {xval, yval, zval},
+			guiVars = {Rvar, lambda0var, phi0var, phi1var},
 		}
-
-		function c:chart(lat, lon, height)
-			return f(lat, lon, height, 
-				self.R, self.lambda0, self.phi0, self.phi1)
-		end
 		
 		function c:updateGUI()
 			local ig = require 'imgui'

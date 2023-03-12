@@ -34,7 +34,8 @@ local latradval = latvar * symmath.pi / 180
 local lonradval = lonvar * symmath.pi / 180
 
 local WGS84_a = 6378137	-- m ... earth equitorial radius
-
+-- TODO global var and remove all WGS84_a's from the var lists (same idea as symmath.pi)
+local WGS84_avar = symmath.var'WGS84_a'
 
 -- tail-call transform list of fields into their values within 't'
 local function getfields(t, ...)
@@ -44,6 +45,10 @@ local function getfields(t, ...)
 end
 
 local Chart = class()
+
+function Chart:getCName()
+	return (self.name:gsub('[%s%-]', '_'))
+end
 
 -- call this to build numeric fields of each name
 -- and to build chart.vars with its fields in-order matching ...
@@ -55,6 +60,7 @@ function Chart:buildVars(varkvs)
 		local k, v = next(kv)
 		self.varnames[i] = k
 		local var = symmath.var(k) 
+		var:nameForExporter('C', self:getCName()..'_'..k)
 		self.vars[k] = var
 		self.varlist[i] = var
 		self[k] = v
@@ -70,6 +76,8 @@ function Chart:buildFunc(exprOut)
 	self.exprIn = table{latvar, lonvar, heightvar}
 		:append(self.varlist or {})
 	
+	-- TODO for 3D this is in z-back 3D coords?
+	-- it doesn't match code.lua's 2D z-up coords
 	self.chartFunc = symmath.export.Lua:toFunc{
 		input = self.exprIn,
 		output = self.exprOut,
@@ -93,7 +101,8 @@ function Chart:buildFunc(exprOut)
 	}
 end
 
--- be sure to define your `var:nameForExporter('C', ...)` beforehand
+-- Be sure to define your `var:nameForExporter('C', ...)` beforehand
+-- TODO what about GLSL uniforms?  and providing default values?
 function Chart:getGLSLBody()
 	return symmath.export.C:toCode{
 		input = self.exprIn,
@@ -102,8 +111,11 @@ function Chart:getGLSLBody()
 end
 
 function Chart:getGLSLFunc()
-	return table{
-		'vec3 chart_'..self.name:gsub(' ', '_')..'(vec3 latLonHeight) {',
+	local escname = self:getCName()
+	return self.varnames:mapi(function(k)
+		return 'const float '..escname..'_'..k..' = '..self[k]..';'
+	end):append{
+		'vec3 chart_'..escname..'(vec3 latLonHeight) {',
 		self:getGLSLBody(),
 		'	return vec3(out1, out2, out3);',
 		'}',
@@ -112,8 +124,11 @@ end
 
 -- the '3D' indicates to be sure to insert a `xformZBackToZUp(pt)` last
 function Chart:getGLSLFunc3D()
-	return table{
-		'vec3 chart_'..self.name:gsub(' ', '_')..'(vec3 latLonHeight) {',
+	local escname = self:getCName()
+	return self.varnames:mapi(function(k)
+		return 'const float '..escname..'_'..k..' = '..self[k]..';'
+	end):append{
+		'vec3 chart_'..escname..'(vec3 latLonHeight) {',
 		self:getGLSLBody(),
 		'	return xformZBackToZUp(vec3(out1, out2, out3));',
 		'}',
@@ -319,17 +334,9 @@ local charts = {
 	(function()
 		local c = class(Chart)
 		c.name = 'sphere'
-		
-		c:buildVars{
-			{R = WGS84_a},	-- what fields to read from 'chart' for numerical calculations
-		}
-		c.vars.R:nameForExporter('C', 'WGS84_a')	-- this is the GLSL name
-		
-		local rval = heightvar / c.vars.R + 1
+		c:buildVars()
+		local rval = heightvar / WGS84_avar + 1
 		local thetaval = symmath.pi/2 - latradval
-		
-		-- TODO this is in z-back 3D coords?
-		-- it doesn't match code.lua's 2D z-up coords
 		c:buildFunc{
 			rval * symmath.sin(thetaval) * symmath.cos(lonradval),
 			rval * symmath.sin(thetaval) * symmath.sin(lonradval),
@@ -354,18 +361,13 @@ local charts = {
 	(function()
 		local c = class(Chart)
 		c.name = 'cylinder'
-
-		c:buildVars{
-			{R = WGS84_a},
-		}
-		c.vars.R:nameForExporter('C', 'WGS84_a')	-- this is the GLSL name
-		local rval = heightvar / c.vars.R + 1
+		c:buildVars()
+		local rval = heightvar / WGS84_avar + 1
 		c:buildFunc{
 			rval * symmath.cos(lonradval),
 			rval * symmath.sin(lonradval),
 			rval * latradval,
 		}
-
 		-- TODO c:chartInv
 		return c
 	end)(),
@@ -382,23 +384,85 @@ local charts = {
 		c:buildFunc{
 			c.vars.R * (lonradval - c.vars.lambda0) * symmath.cos(c.vars.phi1),
 			c.vars.R * (latradval - c.vars.phi0),
-			heightvar / WGS84_a,	-- really tempting to just make all charts -- even the 2D ones -- in meters.
+			heightvar / WGS84_avar,	-- really tempting to just make all charts -- even the 2D ones -- in meters.
 		}
 		return c
 	end)(),
 
+	-- https://en.wikipedia.org/wiki/Mercator_projection
+	(function()
+		local c = class(Chart)
+		c.name = 'Mercator'
+		c:buildVars{
+			{R = math.sqrt(.5)},
+		}
+		c:buildFunc{
+			c.vars.R * lonradval,
+			c.vars.R * symmath.log(symmath.tan(symmath.pi / 4 + latradval / 2)),
+			heightvar / WGS84_avar,
+		}
+		return c
+	end)(),
+
+	-- https://en.wikipedia.org/wiki/Gall%E2%80%93Peters_projection
+	(function()
+		local c = class(Chart)
+		c.name = 'Gall-Peters'
+		c:buildVars{
+			{R = .5},
+		}
+		c:buildFunc{
+			c.vars.R * lonradval,
+			2 * c.vars.R * symmath.sin(latradval),
+			heightvar / WGS84_avar,
+		}
+		return c
+	end)(),
+
+	-- https://en.wikipedia.org/wiki/Lambert_cylindrical_equal-area_projection
+	(function()
+		local c = class(Chart)
+		c.name = 'Lambert cylindrical equal-area'
+		c:buildVars{
+			{lon0 = 0},
+		}
+		c:buildFunc{
+			1/symmath.sqrt(2) * (lonradval - c.vars.lon0 * symmath.pi / 180),
+			1/symmath.sqrt(2) * symmath.sin(latradval),
+			heightvar / WGS84_avar,
+		}
+		return c
+	end)(),
+
+	-- https://en.wikipedia.org/wiki/Azimuthal_equidistant_projection
 	(function()
 		local c = class(Chart)
 		c.name = 'Azimuthal equidistant'
 		c:buildVars{
 			{R = math.sqrt(.5)},
 		}
-		c.vars.R:nameForExporter('C', 'Azimuthal_equidistant_R')
 		local azimuthalval = c.vars.R * (1 - latvar / 90)
 		c:buildFunc{
 			symmath.sin(lonradval) * azimuthalval,
 			-symmath.cos(lonradval) * azimuthalval,
-			heightvar / WGS84_a,
+			heightvar / WGS84_avar,
+		}
+		return c
+	end)(),
+
+	-- https://en.wikipedia.org/wiki/Lambert_azimuthal_equal-area_projection
+	(function()
+		local c = class(Chart)
+		c.name = 'Lambert azimuthal equal-area'
+		c:buildVars{
+			{R = math.sqrt(2)},
+		}
+		local colat = 90 - latvar	-- spherical friendly
+		local polarR = c.vars.R * symmath.sin(colat * symmath.pi / 360)
+		c:buildFunc{
+			symmath.sin(lonradval) * polarR,
+			-symmath.cos(lonradval) * polarR,
+			heightvar / WGS84_avar,
 		}
 		return c
 	end)(),

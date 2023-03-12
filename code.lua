@@ -76,7 +76,7 @@ bool isfinite(float x) {
 const float WGS84_a = 6378137.;		// equatorial radius
 
 //// MODULE_NAME: chart_sphere
-//// MODULE_DEPENDS: M_PI rad WGS84_a xformZBackToZUp
+//// MODULE_DEPENDS: M_PI WGS84_a xformZBackToZUp
 
 <?=charts.sphere:getGLSLFunc3D()?>
 
@@ -137,104 +137,39 @@ vec3 chart_WGS84(vec3 x) {
 }
 
 //// MODULE_NAME: chart_cylinder
-//// MODULE_DEPENDS: perp2 rad WGS84_a xformZBackToZUp
+//// MODULE_DEPENDS: WGS84_a xformZBackToZUp
 
 <?=charts.cylinder:getGLSLFunc3D()?>
 
 //// MODULE_NAME: chart_Equirectangular
-//// MODULE_DEPENDS: M_PI rad WGS84_a
+//// MODULE_DEPENDS: M_PI WGS84_a
 
-const float Equirectangular_R = 2. / M_PI;
-const float Equirectangular_lambda0 = 0.;
-const float Equirectangular_phi0 = 0.;
-const float Equirectangular_phi1 = 0.;
-const float cos_Equirectangular_phi1 = cos(Equirectangular_phi1);
-vec3 chart_Equirectangular(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	float lonrad = rad(lon);
-	float x = Equirectangular_R * (lonrad - Equirectangular_lambda0) * cos_Equirectangular_phi1;
-	float y = Equirectangular_R * (latrad - Equirectangular_phi0);
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
+<?=charts.Equirectangular:getGLSLFunc()?>
 
 //// MODULE_NAME: chart_Mercator
-//// MODULE_DEPENDS: rad M_PI M_SQRT_2 WGS84_a
+//// MODULE_DEPENDS: M_PI WGS84_a
 
-// https://en.wikipedia.org/wiki/Mercator_projection
-const float Mercator_R = .5 * M_SQRT_2;
-vec3 chart_Mercator(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	float lonrad = rad(lon);
-	float x = Mercator_R * lonrad;
-	float y = Mercator_R * log(tan(M_PI * .25 + latrad * .5));
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
+<?=charts.Mercator:getGLSLFunc()?>
 
 //// MODULE_NAME: chart_Gall_Peters
-//// MODULE_DEPENDS: rad M_PI WGS84_a
+//// MODULE_DEPENDS: M_PI WGS84_a
 
-const float Gall_Peters_R = .5;
-vec3 chart_Gall_Peters(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	float lonrad = rad(lon);
-	float x = Gall_Peters_R * lonrad;
-	float y = 2. * Gall_Peters_R * sin(latrad);
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
+<?=charts['Gall-Peters']:getGLSLFunc()?>
 
 //// MODULE_NAME: chart_Lambert_cylindrical_equal_area
-//// MODULE_DEPENDS: rad M_PI M_SQRT_2 WGS84_a
+//// MODULE_DEPENDS: M_PI WGS84_a
 
-// https://en.wikipedia.org/wiki/Lambert_cylindrical_equal-area_projection
-const float Lambert_cylindrical_equal_area_lon0 = 0.;
-vec3 chart_Lambert_cylindrical_equal_area(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	
-	float x = .5 * M_SQRT_2 * rad(lon - Lambert_cylindrical_equal_area_lon0);
-	float y = .5 * M_SQRT_2 * sin(latrad);
-	
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
+<?=charts['Lambert cylindrical equal-area']:getGLSLFunc()?>
 
 //// MODULE_NAME: chart_Azimuthal_equidistant 
-//// MODULE_DEPENDS: M_PI M_SQRT_2 rad WGS84_a
+//// MODULE_DEPENDS: M_PI WGS84_a
 
-const float Azimuthal_equidistant_R = <?=charts['Azimuthal equidistant'].R?>;
 <?=charts['Azimuthal equidistant']:getGLSLFunc()?>
 
 //// MODULE_NAME: chart_Lambert_azimuthal_equal_area
-//// MODULE_DEPENDS: M_PI M_SQRT_2 rad
+//// MODULE_DEPENDS: M_PI WGS84_a
 
-// https://en.wikipedia.org/wiki/Lambert_azimuthal_equal-area_projection
-const float Lambert_azimuthal_equal_area_R = M_SQRT_2;
-vec3 chart_Lambert_azimuthal_equal_area(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float colat = 90 - lat;	// spherical friendly
-	float polarR = Lambert_azimuthal_equal_area_R * sin(.5 * rad(colat));
-	float lonrad = rad(lon);
-	float x = sin(lonrad) * polarR;
-	float y = -cos(lonrad) * polarR;
-	float z = height / WGS84_a;
-	return vec3(x, y, z);
-}
+<?=charts['Lambert azimuthal equal-area']:getGLSLFunc()?>
 
 //// MODULE_NAME: chart_Mollweide
 //// MODULE_DEPENDS: M_PI M_SQRT_2 rad isfinite WGS84_a

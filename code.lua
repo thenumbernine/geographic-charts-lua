@@ -13,7 +13,7 @@ local ModuleSet = require 'modules'
 
 local modules = ModuleSet()
 
-modules:addFromMarkup(template[[
+local code = template[[
 //// MODULE_NAME: M_PI
 const float M_PI = <?=math.pi?>;
 
@@ -76,20 +76,22 @@ bool isfinite(float x) {
 
 const float WGS84_a = 6378137.;		// equatorial radius
 
-<?
+]]
+
 local symmath = require 'symmath'
 symmath.export.C.numberType = 'float'	-- hmm ... nice to be an arg ...
-local charts = require 'geographic-charts'
-for i,chart in ipairs(charts) do
-?>
-<?=chart:getGLSLModule()?>
-<? end ?>
 
-]])
+local charts = require 'geographic-charts'
+
+for i,chart in ipairs(charts) do
+	code = code .. chart:getGLSLModule() .. '\n'
+end
+
+modules:addFromMarkup(code)
+
 
 -- https://en.wikipedia.org/wiki/List_of_map_projections
 local table = require 'ext.table'
-local charts = require 'geographic-charts'
 local allChartCode = modules:getCodeAndHeader(table.mapi(charts, function(c) return c:getSymbol() end):unpack())
 
 return allChartCode

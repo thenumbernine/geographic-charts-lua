@@ -84,6 +84,9 @@ function Chart:buildFunc(exprOut)
 		output = self.exprOut,
 	}
 
+	-- for charts with serious problems
+	if self.skipBasis then return end
+
 	local y = symmath.Array(table.unpack(self.exprOut))
 	self.basisExprs = table{latvar, lonvar, heightvar}:mapi(function(x)
 		return y:diff(x)()
@@ -560,8 +563,8 @@ local charts = {
 	-- https://en.wikipedia.org/wiki/Winkel_tripel_projection
 	class(Chart, {
 		name = 'Winkel tripel',
+		normalizeBasisNumerically = true,
 		build = function(c)
-			c.normalizeBasisNumerically = true
 			c:buildVars{
 				{lat1 = 0},
 			}
@@ -591,8 +594,8 @@ local charts = {
 	-- https://en.wikipedia.org/wiki/Kavrayskiy_VII_projection
 	class(Chart, {
 		name = 'Kavrayskiy VIII',
+		normalizeBasisNumerically = true,
 		build = function(c)
-			c.normalizeBasisNumerically = true
 			c:buildVars()
 			local latnormval = latvar / 180	--[-1,1]
 			c:buildFunc{
@@ -617,6 +620,56 @@ local charts = {
 			c:buildFunc{
 				c.vars.R / 2 * (sinlon * coslat - (1 - sinlat) * coslon),
 				-c.vars.R / 2 * (coslon * coslat + (1 - sinlat) * sinlon),
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
+
+	-- https://en.wikipedia.org/wiki/Albers_projection
+	class(Chart, {
+		name = 'Albers',
+		normalizeBasisNumerically = true,
+		build = function(c)
+			c:buildVars{
+				{R = 1},
+				{lat1 = 15},
+				{lat2 = 45},
+				{lon0 = 0},
+				{lat0 = 0},
+			}
+			local lat1rad = c.vars.lat1 * symmath.pi / 180
+			local lat2rad = c.vars.lat2 * symmath.pi / 180
+			local lon0rad = c.vars.lon0 * symmath.pi / 180
+			local lat0rad = c.vars.lat0 * symmath.pi / 180
+			local n = (symmath.sin(lat1rad) + symmath.sin(lat2rad)) / 2
+			local C = symmath.cos(lat1rad)^2 + 2 * n * symmath.sin(lat1rad)
+			local rho0 = c.vars.R / n * symmath.sqrt(C - 2 * n * symmath.sin(lat0rad))
+			local theta = n * (lonradval - lon0rad)
+			local rho = c.vars.R / n * symmath.sqrt(C - 2 * n * symmath.sin(latradval))
+			c:buildFunc{
+				rho * symmath.sin(theta),
+				rho0 - rho * symmath.cos(theta),
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
+
+	-- https://en.wikipedia.org/wiki/Bonne_projection
+	class(Chart, {
+		name = 'Bonne',
+		skipBasis = true,
+		build = function(c)
+			c:buildVars{
+				{lon0 = 0},
+				{lat1 = 45},
+			}
+			local lon0rad = c.vars.lon0 * symmath.pi / 180
+			local lat1rad = c.vars.lat1 * symmath.pi / 180
+			local rho = 1 / symmath.tan(lat1rad) + lat1rad - latradval
+			local E = (lonradval - lon0rad) * symmath.cos(latradval) / rho
+			c:buildFunc{
+				rho * symmath.sin(E),
+				1 / symmath.tan(lat1rad) - rho * symmath.cos(E),
 				heightvar / WGS84_avar,
 			}
 		end,

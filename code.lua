@@ -82,9 +82,22 @@ bool isfinite(float x) {
 
 const float WGS84_a = 6378137.;		// equatorial radius
 
+<?=charts.cylinder:getGLSLModule()?>
+<?=charts.Equirectangular:getGLSLModule()?>
+<?=charts.Mercator:getGLSLModule()?>
+<?=charts['Gall-Peters']:getGLSLModule()?>
+<?=charts['Lambert cylindrical equal-area']:getGLSLModule()?>
+<?=charts['Azimuthal equidistant']:getGLSLModule()?>
+<?=charts['Lambert azimuthal equal-area']:getGLSLModule()?>
+<?=charts.Sinusoidal:getGLSLModule()?>
+<?=charts['Winkel tripel']:getGLSLModule()?>
+<?=charts['Kavrayskiy VIII']:getGLSLModule()?>
+<?=charts.Wiechel:getGLSLModule()?>
+<?=charts.Albers:getGLSLModule()?>
+<?=charts.Bonne:getGLSLModule()?>
+
 <?=charts.sphere:getGLSLModule()?>
 // still in chart_sphere module ...
-
 //// MODULE_DEPENDS: xformZUpToZBack deg
 
 vec3 chartInv_sphere(vec3 pt) {
@@ -141,14 +154,6 @@ vec3 chart_WGS84(vec3 x) {
 	return y;
 }
 
-<?=charts.cylinder:getGLSLModule()?>
-<?=charts.Equirectangular:getGLSLModule()?>
-<?=charts.Mercator:getGLSLModule()?>
-<?=charts['Gall-Peters']:getGLSLModule()?>
-<?=charts['Lambert cylindrical equal-area']:getGLSLModule()?>
-<?=charts['Azimuthal equidistant']:getGLSLModule()?>
-<?=charts['Lambert azimuthal equal-area']:getGLSLModule()?>
-
 //// MODULE_NAME: chart_Mollweide
 //// MODULE_DEPENDS: M_PI M_SQRT_2 rad isfinite WGS84_a
 
@@ -181,61 +186,6 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 	if (!isfinite(y)) y = 0;
 	if (!isfinite(z)) z = 0;
 	return vec3(x, y, z);
-}
-
-<?=charts.Sinusoidal:getGLSLModule()?>
-<?=charts['Winkel tripel']:getGLSLModule()?>
-<?=charts['Kavrayskiy VIII']:getGLSLModule()?>
-<?=charts.Wiechel:getGLSLModule()?>
-
-//// MODULE_NAME: chart_Albers
-//// MODULE_DEPENDS: rad M_PI M_SQRT_2 WGS84_a
-
-// https://en.wikipedia.org/wiki/Albers_projection
-vec3 chart_Albers(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	float lonrad = rad(lon);
-
-	const float R = 1.;
-	const float latrad1 = rad(15);
-	const float latrad2 = rad(45);
-	const float lonrad0 = 0.;
-	const float latrad0 = 0.;
-	const float n = .5 * (sin(latrad1) + sin(latrad2));
-	const float C = cos(latrad1) * cos(latrad1) + 2. * n * sin(latrad1);
-	const float rho0 = R / n * sqrt(C - 2. * n * sin(latrad0));
-	float theta = n * (lonrad - lonrad0);
-	float rho = R / n * sqrt(C - 2. * n * sin(latrad));
-	float x = rho * sin(theta);
-	float y = rho0 - rho * cos(theta);
-
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
-
-//// MODULE_NAME: chart_Bonne
-//// MODULE_DEPENDS: rad M_PI M_SQRT_2 WGS84_a
-
-// https://en.wikipedia.org/wiki/Bonne_projection
-vec3 chart_Bonne(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	float lonrad = rad(lon);
-
-	const float lonrad0 = 0.;
-	const float latrad1 = rad(45);
-	float rho = 1. / tan(latrad1) + latrad1 - latrad;
-	float E = (lonrad - lonrad0) * cos(latrad) / rho;
-	float x = rho * sin(E);
-	float y = 1. / tan(latrad1) - rho * cos(E);
-
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
 }
 
 ]])

@@ -50,7 +50,7 @@ local chartNames = table{
 	-- 2D - circle
 	'Azimuthal_equidistant',
 	'Lambert_azimuthal_equal_area',
-	'Weichel',
+	'Wiechel',
 	-- 2D - conic
 	'Albers',
 	'Bonne',
@@ -120,7 +120,7 @@ out vec4 colorv;
 
 //3D space point that's gonna be used for texturing
 // interpolate in 3D so we don't get weird artifats in the texcoord lookup where the texcoords wrap around
-out vec3 texcoordptv;	
+out vec3 texcoordptv;
 
 void main() {
 	// expect vertex xyz to be lat lon height
@@ -174,7 +174,7 @@ vec2 rot2D(vec2 x, float theta) {
 }
 
 void main() {
-		
+
 	// then rotate sphere by zeroRoll, zeroLon, and maybe a roll too?
 	// then back to lat, lon
 	// idk what i'm doing

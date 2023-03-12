@@ -13,7 +13,7 @@ geographic / map charts: the longitude is λ and the latitude is φ ...
 so TODO change the calc_* stuff from r_θφ to h_φλ? idk ...
 
 --]]
-		
+
 -- using geographic labels: lat = φ, lon = λ
 local table = require 'ext.table'
 local class = require 'ext.class'
@@ -22,7 +22,7 @@ local timer = require 'ext.timer'
 local vec3d = require 'vec-ffi.vec3d'
 local symmath = require 'symmath'
 
--- input 
+-- input
 local latvar = symmath.var'lat'
 local lonvar = symmath.var'lon'
 local heightvar = symmath.var'height'
@@ -60,7 +60,7 @@ function Chart:buildVars(varkvs)
 	for i,kv in ipairs(varkvs or {}) do
 		local k, v = next(kv)
 		self.varnames[i] = k
-		local var = symmath.var(k) 
+		local var = symmath.var(k)
 		var:nameForExporter('C', self:getCName()..'_'..k)
 		self.vars[k] = var
 		self.varlist[i] = var
@@ -76,7 +76,7 @@ function Chart:buildFunc(exprOut)
 	self.exprOut = exprOut
 	self.exprIn = table{latvar, lonvar, heightvar}
 		:append(self.varlist or {})
-	
+
 	-- TODO for 3D this is in z-back 3D coords?
 	-- it doesn't match code.lua's 2D z-up coords
 	self.chartFunc = symmath.export.Lua:toFunc{
@@ -146,7 +146,7 @@ end
 function Chart:getGLSLModule()
 	return table{
 		'//// MODULE_NAME: chart_'..self:getCName(),
-		'//// MODULE_DEPENDS: M_PI WGS84_a xformZBackToZUp',
+		'//// MODULE_DEPENDS: M_PI WGS84_a xformZBackToZUp sinc',
 		not self.is3D
 			and self:getGLSLFunc()
 			or self:getGLSLFunc3D(),
@@ -177,9 +177,9 @@ end
 local charts = {
 	(function()
 		local c = class(Chart)
-		
+
 		c.name = 'WGS84'
-		
+
 		-- specific to WGS84:
 		c.a = WGS84_a
 		c.b = 6356752.3142	-- m ... earth polar radius
@@ -195,33 +195,33 @@ local charts = {
 		local eccentricitySquaredVal = (2 * inverseFlatteningVal - 1) / (inverseFlatteningVal * inverseFlatteningVal)
 		local e = math.sqrt(1 - c.b * c.b / (c.a * c.a))
 		c.esq = e * e
-		
+
 		local flattening = 1 - c.b / c.a
 		c.inverseFlattening = 298.257223563
 		c.eccentricitySquared = (2 * c.inverseFlattening - 1) / (c.inverseFlattening * c.inverseFlattening)
-		
+
 		function c:calc_N(sinTheta, equatorialRadius, eccentricitySquared)
 			local denom = math.sqrt(1 - eccentricitySquared * sinTheta * sinTheta)
 			return equatorialRadius / denom
 		end
-		
+
 		function c:calc_dN_dTheta(sinTheta, cosTheta, equatorialRadius, eccentricitySquared)
 			local denom = math.sqrt(1 - eccentricitySquared * sinTheta * sinTheta)
 			return eccentricitySquared * sinTheta * cosTheta * equatorialRadius / (denom * denom * denom)
 		end
 
 		-- |d(x,y,z)/d(h,θ,φ)| for h=0
-		function c:dx_dsphere_det_h_eq_0(lat) 
+		function c:dx_dsphere_det_h_eq_0(lat)
 			local theta = math.rad(lat)		-- spherical inclination angle (not azumuthal θ)
 			local sinTheta = math.sin(theta)
 			local cosTheta = math.cos(theta)
-			
+
 			local h = 0
 			local N = self:calc_N(sinTheta, self.a, self.eccentricitySquared)
 			local dN_dTheta = self:calc_dN_dTheta(sinTheta, cosTheta, self.a, self.eccentricitySquared)
 			local cosTheta2 = cosTheta * cosTheta
 			return -N * (
-				N * cosTheta 
+				N * cosTheta
 				+ self.eccentricitySquared * cosTheta2 * N * cosTheta
 				+ self.eccentricitySquared * cosTheta2 * dN_dTheta * sinTheta
 			)
@@ -237,16 +237,16 @@ local charts = {
 			local theta = math.rad(lat)		-- spherical inclination angle (not azumuthal θ)
 			local cosTheta = math.cos(theta)
 			local sinTheta = math.sin(theta)
-			
+
 			local N = self:calc_N(sinTheta, self.a, self.eccentricitySquared)
-			
+
 			local NPlusH = N + height
-			return 
+			return
 				NPlusH * cosTheta * math.cos(phi),
 				NPlusH * cosTheta * math.sin(phi),
 				(N * (1 - self.eccentricitySquared) + height) * sinTheta
 		end
-		
+
 		-- x,y,z = meters
 		-- returns lat (degrees), lon (degrees), height (meters)
 		-- lat and lon has the same range as chart()
@@ -268,15 +268,15 @@ local charts = {
 				theta = newtheta
 				x,y,z = self:chart(math.deg(theta), math.deg(phi), 0)
 			end
-			
+
 			local NPlusHTimesCosTheta = math.sqrt(x*x + y*y)
 			local NPlusH = NPlusHTimesCosTheta / math.cos(theta)
 			local height = NPlusH - self:calc_N(math.sin(theta), self.a, self.eccentricitySquared)
 
 			-- lat, lon, height:
-			return 
+			return
 				math.deg(theta),
-				(math.deg(phi) + 180) % 360 - 180, 
+				(math.deg(phi) + 180) % 360 - 180,
 				height
 		end
 
@@ -300,7 +300,7 @@ local charts = {
 			local xp = (rCart + height) * cosPhi
 			local dphi_xp = dphi_rCart * cosPhi + (rCart + height) * dphi_cosPhi
 			local dheight_xp = cosPhi
-			
+
 			local xp_over_a = (rCart_over_a + height / self.a) * cosPhi
 
 			local zp = (rCart * (1 - self.esq) + height) * sinPhi
@@ -312,7 +312,7 @@ local charts = {
 			local r2D = math.sqrt(xp * xp + zp * zp)
 			local dphi_r2D = (xp * dphi_xp + zp * dphi_zp) / r2D
 			local dheight_r2D = (xp * dheight_xp + zp * dheight_zp) / r2D
-			
+
 			local r2D_over_a = math.sqrt(xp_over_a * xp_over_a + zp_over_a * zp_over_a)
 			local dphi_r2D_over_a = (xp_over_a * dphi_xp + zp_over_a * dphi_zp) / r2D
 
@@ -328,14 +328,14 @@ local charts = {
 			--local x = r2D * cosPhiSph / self.a * cosLambda
 			--local y = r2D * cosPhiSph / self.a * sinLambda
 			--local z = r2D * sinPhiSph / self.a
-			
+
 			local dphi_x = (dphi_r2D_over_a * cosPhiSph + r2D_over_a * dphi_cosPhiSph) * cosLambda
 			local dphi_y = (dphi_r2D_over_a * cosPhiSph + r2D_over_a * dphi_cosPhiSph) * sinLambda
 			local dphi_z = (dphi_r2D_over_a * sinPhiSph + r2D_over_a * dphi_sinPhiSph)
-			
+
 			local dlambda_x = -sinLambda
 			local dlambda_y = cosLambda
-			
+
 			local dheight_x = (dheight_r2D * cosPhiSph + r2D * dheight_cosPhiSph) * cosLambda
 			local dheight_y = (dheight_r2D * cosPhiSph + r2D * dheight_cosPhiSph) * sinLambda
 			local dheight_z = (dheight_r2D * sinPhiSph + r2D * dheight_sinPhiSph)
@@ -343,9 +343,9 @@ local charts = {
 			return
 				vec3d(dphi_x, dphi_y, dphi_z),
 				vec3d(dlambda_x, dlambda_y, 0),
-				vec3d(-dheight_x, -dheight_y, -dheight_z)	
+				vec3d(-dheight_x, -dheight_y, -dheight_z)
 		end
-		
+
 		return c
 	end)(),
 
@@ -415,9 +415,17 @@ local charts = {
 			c:buildVars{
 				{R = math.sqrt(.5)},
 			}
+			-- TODO
+			-- Mercator is defined so that at phi=-pi/2 and phi=pi/2 the y -> infinity
+			-- so ... clamp tan's output?
+			-- symmath needs a clamp() and a min() and max() functions ...
+			-- until then, just scale by 1-eps
+			local eps = 1e-2
 			c:buildFunc{
 				c.vars.R * lonradval,
-				c.vars.R * symmath.log(symmath.tan(symmath.pi / 4 + latradval / 2)),
+				c.vars.R * symmath.log(
+					eps + symmath.tan((1-eps) * symmath.pi * (90 + latvar) / 360)
+				),
 				heightvar / WGS84_avar,
 			}
 		end,
@@ -488,9 +496,9 @@ local charts = {
 
 	(function()
 		local c = class(Chart)
-		
+
 		c.name = 'Mollweide'
-	
+
 		c.R = math.pi / 4
 		c.lambda0 = 0	-- in degrees
 		function c:updateGUI()
@@ -498,7 +506,7 @@ local charts = {
 			ig.luatableInputFloat('R', self, 'R')
 			ig.luatableInputFloat('lambda0', self, 'lambda0')
 		end
-		
+
 		function c:chart(lat, lon, height)
 			local lonrad = math.rad(lon)
 			local lambda = lonrad
@@ -523,14 +531,14 @@ local charts = {
 			if not math.isfinite(mollweidez) then mollweidez = 0 end
 			return mollweidex, mollweidey, mollweidez
 		end
-		
+
 		function c:basis(lat, lon, height)
 			return
 				vec3d(0, 1, 0),
 				vec3d(1, 0, 0),
 				vec3d(0, 0, -1)
 		end
-		
+
 		return c
 	end)(),
 
@@ -557,12 +565,21 @@ local charts = {
 			c:buildVars{
 				{lat1 = 0},
 			}
+
+			-- TODO move this to symmath?
+			-- so sinc has to also be defined in glsl
+			local sinc = class(require 'symmath.Function')
+			sinc.name = 'sinc'
+			sinc.realFunc = function(x)
+				if x == 0 then return 1 end
+				return math.sin(x) / x
+			end
+
 			local alpha = symmath.acos(symmath.cos(latradval) * symmath.cos(lonradval / 2))
-			-- TODO conditional? sinc(0) = 0 ...
-			local sincAlpha = symmath.sin(alpha) / alpha
+			local sincAlpha = sinc(alpha)
 			c:buildFunc{
 				(
-					lonradval * symmath.cos(c.vars.lat1 * symmath.pi / 180) 
+					lonradval * symmath.cos(c.vars.lat1 * symmath.pi / 180)
 					+ 2 * symmath.cos(latradval) * symmath.sin(lonradval / 2) / sincAlpha
 				) / 4,
 				(latradval + symmath.sin(latradval) / sincAlpha) / 4,
@@ -581,6 +598,25 @@ local charts = {
 			c:buildFunc{
 				lonradval * symmath.sqrt(symmath.frac(1,3) - latnormval * latnormval),
 				latradval,
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
+
+	-- https://en.wikipedia.org/wiki/Wiechel_projection
+	class(Chart, {
+		name = 'Wiechel',
+		build = function(c)
+			c:buildVars{
+				{R = math.sqrt(2)},
+			}
+			local coslon = symmath.cos(lonradval)
+			local coslat = symmath.cos(latradval)
+			local sinlon = symmath.sin(lonradval)
+			local sinlat = symmath.sin(latradval)
+			c:buildFunc{
+				c.vars.R / 2 * (sinlon * coslat - (1 - sinlat) * coslon),
+				-c.vars.R / 2 * (coslon * coslat + (1 - sinlat) * sinlon),
 				heightvar / WGS84_avar,
 			}
 		end,

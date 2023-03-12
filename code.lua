@@ -6,7 +6,7 @@ then maybe later I'll move chart-specific code into charts and leave the extras 
 each accepts input vec3 latLonHeight
 latLonHeight.x = latitude in degrees
 latLonHeight.y = longitude in degrees
-latLonHeight.z = height above sealevel, in meters 
+latLonHeight.z = height above sealevel, in meters
 --]]
 local template = require 'template'
 local ModuleSet = require 'modules'
@@ -44,6 +44,13 @@ float deg(float d) {
 
 vec2 perp2(vec2 a) {
 	return vec2(-a.y, a.x);
+}
+
+//// MODULE_NAME: sinc
+
+float sinc(float x) {
+	if (x == 0.) return 1.;
+	return sin(x) / x;
 }
 
 //// MODULE_NAME: xformZBackToZUp
@@ -117,9 +124,9 @@ vec3 chart_WGS84(vec3 x) {
 	float theta = rad(lat);		// spherical inclination angle (not azumuthal θ)
 	float cosTheta = cos(theta);
 	float sinTheta = sin(theta);
-	
+
 	float N = WGS84_calc_N(sinTheta);
-	
+
 	float NPlusH = N + height;
 	vec3 y = vec3(
 		NPlusH * cosTheta * cos(phi),
@@ -179,29 +186,7 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 <?=charts.Sinusoidal:getGLSLModule()?>
 <?=charts['Winkel tripel']:getGLSLModule()?>
 <?=charts['Kavrayskiy VIII']:getGLSLModule()?>
-
-//// MODULE_NAME: chart_Weichel
-//// MODULE_DEPENDS: rad M_PI M_SQRT_2 WGS84_a
-
-// https://en.wikipedia.org/wiki/Wiechel_projection
-const float Weichel_R = M_SQRT_2;
-vec3 chart_Weichel(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	float lonrad = rad(lon);
-
-	float coslon = cos(lonrad);
-	float coslat = cos(latrad);
-	float sinlon = sin(lonrad);
-	float sinlat = sin(latrad);
-	float x = .5 * Weichel_R * (sinlon * coslat - (1. - sinlat) * coslon);
-	float y = -.5 * Weichel_R * (coslon * coslat + (1. - sinlat) * sinlon);
-
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
+<?=charts.Wiechel:getGLSLModule()?>
 
 //// MODULE_NAME: chart_Albers
 //// MODULE_DEPENDS: rad M_PI M_SQRT_2 WGS84_a
@@ -286,7 +271,7 @@ local allChartCode = modules:getCodeAndHeader(
 	'chart_Lambert_azimuthal_equal_area',
 	-- Robinson ... is an interpolation table-based: https://en.wikipedia.org/wiki/Robinson_projection
 	-- Stereographic
-	'chart_Weichel',
+	'chart_Wiechel',
 	-- 2D - conic
 	'chart_Albers',
 	-- Albers generalizes this: https://en.wikipedia.org/wiki/Lambert_equal-area_conic_projection

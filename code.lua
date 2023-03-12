@@ -75,10 +75,8 @@ bool isfinite(float x) {
 
 const float WGS84_a = 6378137.;		// equatorial radius
 
-//// MODULE_NAME: chart_sphere
-//// MODULE_DEPENDS: M_PI WGS84_a xformZBackToZUp
-
-<?=charts.sphere:getGLSLFunc3D()?>
+<?=charts.sphere:getGLSLModule()?>
+// still in chart_sphere module ...
 
 //// MODULE_DEPENDS: xformZUpToZBack deg
 
@@ -136,40 +134,13 @@ vec3 chart_WGS84(vec3 x) {
 	return y;
 }
 
-//// MODULE_NAME: chart_cylinder
-//// MODULE_DEPENDS: WGS84_a xformZBackToZUp
-
-<?=charts.cylinder:getGLSLFunc3D()?>
-
-//// MODULE_NAME: chart_Equirectangular
-//// MODULE_DEPENDS: M_PI WGS84_a
-
-<?=charts.Equirectangular:getGLSLFunc()?>
-
-//// MODULE_NAME: chart_Mercator
-//// MODULE_DEPENDS: M_PI WGS84_a
-
-<?=charts.Mercator:getGLSLFunc()?>
-
-//// MODULE_NAME: chart_Gall_Peters
-//// MODULE_DEPENDS: M_PI WGS84_a
-
-<?=charts['Gall-Peters']:getGLSLFunc()?>
-
-//// MODULE_NAME: chart_Lambert_cylindrical_equal_area
-//// MODULE_DEPENDS: M_PI WGS84_a
-
-<?=charts['Lambert cylindrical equal-area']:getGLSLFunc()?>
-
-//// MODULE_NAME: chart_Azimuthal_equidistant 
-//// MODULE_DEPENDS: M_PI WGS84_a
-
-<?=charts['Azimuthal equidistant']:getGLSLFunc()?>
-
-//// MODULE_NAME: chart_Lambert_azimuthal_equal_area
-//// MODULE_DEPENDS: M_PI WGS84_a
-
-<?=charts['Lambert azimuthal equal-area']:getGLSLFunc()?>
+<?=charts.cylinder:getGLSLModule()?>
+<?=charts.Equirectangular:getGLSLModule()?>
+<?=charts.Mercator:getGLSLModule()?>
+<?=charts['Gall-Peters']:getGLSLModule()?>
+<?=charts['Lambert cylindrical equal-area']:getGLSLModule()?>
+<?=charts['Azimuthal equidistant']:getGLSLModule()?>
+<?=charts['Lambert azimuthal equal-area']:getGLSLModule()?>
 
 //// MODULE_NAME: chart_Mollweide
 //// MODULE_DEPENDS: M_PI M_SQRT_2 rad isfinite WGS84_a
@@ -205,59 +176,9 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 	return vec3(x, y, z);
 }
 
-//// MODULE_NAME: chart_Sinusoidal
-//// MODULE_DEPENDS: rad M_PI WGS84_a
-
-// https://en.wikipedia.org/wiki/Sinusoidal_projection
-const float Sinusoidal_lon0 = 0.;
-vec3 chart_Sinusoidal(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-
-	float x = .5 * rad(lon - Sinusoidal_lon0) * cos(latrad);
-	float y = .5 * latrad;
-
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
-
-//// MODULE_NAME: chart_Winkel_tripel
-//// MODULE_DEPENDS: rad M_PI WGS84_a
-
-// https://en.wikipedia.org/wiki/Winkel_tripel_projection
-const float Winkel_tripel_lat1 = 0.;
-vec3 chart_Winkel_tripel(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	float lonrad = rad(lon);
-	float alpha = acos(cos(latrad) * cos(.5 * lonrad));
-	float sincAlpha = alpha == 0. ? 1. : sin(alpha) / alpha;
-	float x = .25 * (lonrad * cos(rad(Winkel_tripel_lat1)) + 2. * cos(latrad) * sin(.5 * lonrad) / sincAlpha);
-	float y = .25 * (latrad + sin(latrad) / sincAlpha);
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
-
-//// MODULE_NAME: chart_Kavrayskiy_VIII
-//// MODULE_DEPENDS: rad M_PI WGS84_a
-
-// https://en.wikipedia.org/wiki/Kavrayskiy_VII_projection
-vec3 chart_Kavrayskiy_VIII(vec3 latLonHeight) {
-	float lat = latLonHeight.x;
-	float lon = latLonHeight.y;
-	float height = latLonHeight.z;
-	float latrad = rad(lat);
-	float lonrad = rad(lon);
-	float latnorm = lat / 180.;	//[-1,1]
-	float x = lonrad * sqrt(1./3. - latnorm * latnorm);
-	float y = latrad;
-	float z = height / WGS84_a;
-	return vec3(x,y,z);
-}
+<?=charts.Sinusoidal:getGLSLModule()?>
+<?=charts['Winkel tripel']:getGLSLModule()?>
+<?=charts['Kavrayskiy VIII']:getGLSLModule()?>
 
 //// MODULE_NAME: chart_Weichel
 //// MODULE_DEPENDS: rad M_PI M_SQRT_2 WGS84_a

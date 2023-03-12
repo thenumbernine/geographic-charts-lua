@@ -18,6 +18,7 @@ so TODO change the calc_* stuff from r_θφ to h_φλ? idk ...
 local table = require 'ext.table'
 local class = require 'ext.class'
 local math = require 'ext.math'
+local timer = require 'ext.timer'
 local vec3d = require 'vec-ffi.vec3d'
 local symmath = require 'symmath'
 
@@ -87,18 +88,25 @@ function Chart:buildFunc(exprOut)
 	self.basisExprs = table{latvar, lonvar, heightvar}:mapi(function(x)
 		return y:diff(x)()
 	end)
-	self.basisNormExprs = self.basisExprs:mapi(function(dy_dx)
-		local len = symmath.sqrt(
-			dy_dx[1]^2
-			+ dy_dx[2]^2
-			+ dy_dx[3]^2
-		)
-		return (dy_dx / len)()
-	end)
-	self.basisFunc = symmath.export.Lua:toFunc{
-		input = self.exprIn,
-		output = self.basisNormExprs,
-	}
+	if self.normalizeBasisNumerically then
+		self.basisFunc = symmath.export.Lua:toFunc{
+			input = self.exprIn,
+			output = self.basisExprs,
+		}
+	else
+		self.basisNormExprs = self.basisExprs:mapi(function(dy_dx)
+			local len = symmath.sqrt(
+				dy_dx[1]^2
+				+ dy_dx[2]^2
+				+ dy_dx[3]^2
+			)
+			return (dy_dx / len)()
+		end)
+		self.basisFunc = symmath.export.Lua:toFunc{
+			input = self.exprIn,
+			output = self.basisNormExprs,
+		}
+	end
 end
 
 -- Be sure to define your `var:nameForExporter('C', ...)` beforehand
@@ -135,6 +143,16 @@ function Chart:getGLSLFunc3D()
 	}:concat'\n'
 end
 
+function Chart:getGLSLModule()
+	return table{
+		'//// MODULE_NAME: chart_'..self:getCName(),
+		'//// MODULE_DEPENDS: M_PI WGS84_a xformZBackToZUp',
+		not self.is3D
+			and self:getGLSLFunc()
+			or self:getGLSLFunc3D(),
+	}:concat'\n'
+end
+
 function Chart:chart(lat, lon, height)
 	return self.chartFunc(lat, lon, height, getfields(self, table.unpack(self.varnames)))
 end
@@ -158,7 +176,7 @@ end
 
 local charts = {
 	(function()
-		local c = {}
+		local c = class(Chart)
 		
 		c.name = 'WGS84'
 		
@@ -331,144 +349,145 @@ local charts = {
 		return c
 	end)(),
 
-	(function()
-		local c = class(Chart)
-		c.name = 'sphere'
-		c:buildVars()
-		local rval = heightvar / WGS84_avar + 1
-		local thetaval = symmath.pi/2 - latradval
-		c:buildFunc{
-			rval * symmath.sin(thetaval) * symmath.cos(lonradval),
-			rval * symmath.sin(thetaval) * symmath.sin(lonradval),
-			rval * symmath.cos(thetaval),
-		}
+	class(Chart, {
+		name = 'sphere',
+		is3D = true,
+		build = function(c)
+			c:buildVars()
+			local rval = heightvar / WGS84_avar + 1
+			local thetaval = symmath.pi/2 - latradval
+			c:buildFunc{
+				rval * symmath.sin(thetaval) * symmath.cos(lonradval),
+				rval * symmath.sin(thetaval) * symmath.sin(lonradval),
+				rval * symmath.cos(thetaval),
+			}
+			function c:chartInv(x, y, z)
+				local r = math.sqrt(x*x + y*y + z*z)
+				local phi = math.atan2(y, x)
+				local r2 = math.sqrt(x*x + y*y)
+				local theta = math.atan(r2 / z)
+				local height = r - 1
+				return
+					math.deg(theta),
+					(math.deg(phi) + 180) % 360 - 180,
+					height
+			end
+		end,
+	}),
 
-		function c:chartInv(x, y, z)
-			local r = math.sqrt(x*x + y*y + z*z)
-			local phi = math.atan2(y, x)
-			local r2 = math.sqrt(x*x + y*y)
-			local theta = math.atan(r2 / z)
-			local height = r - 1
-			return
-				math.deg(theta),
-				(math.deg(phi) + 180) % 360 - 180,
-				height
-		end
-		
-		return c
-	end)(),
-	
-	(function()
-		local c = class(Chart)
-		c.name = 'cylinder'
-		c:buildVars()
-		local rval = heightvar / WGS84_avar + 1
-		c:buildFunc{
-			rval * symmath.cos(lonradval),
-			rval * symmath.sin(lonradval),
-			rval * latradval,
-		}
-		-- TODO c:chartInv
-		return c
-	end)(),
+	class(Chart, {
+		name = 'cylinder',
+		is3D = true,
+		build = function(c)
+			c:buildVars()
+			local rval = heightvar / WGS84_avar + 1
+			c:buildFunc{
+				rval * symmath.cos(lonradval),
+				rval * symmath.sin(lonradval),
+				rval * latradval,
+			}
+			-- TODO c:chartInv
+		end,
+	}),
 
-	(function()
-		local c = class(Chart)
-		c.name = 'Equirectangular'
-		c:buildVars{
-			{R = 2/math.pi},
-			{lambda0 = 0},
-			{phi0 = 0},
-			{phi1 = 0},
-		}
-		c:buildFunc{
-			c.vars.R * (lonradval - c.vars.lambda0) * symmath.cos(c.vars.phi1),
-			c.vars.R * (latradval - c.vars.phi0),
-			heightvar / WGS84_avar,	-- really tempting to just make all charts -- even the 2D ones -- in meters.
-		}
-		return c
-	end)(),
+	-- https://en.wikipedia.org/wiki/Equirectangular_projection
+	class(Chart, {
+		name = 'Equirectangular',
+		build = function(c)
+			c:buildVars{
+				{R = 2/math.pi},
+				{lambda0 = 0},
+				{phi0 = 0},
+				{phi1 = 0},
+			}
+			c:buildFunc{
+				c.vars.R * (lonradval - c.vars.lambda0) * symmath.cos(c.vars.phi1),
+				c.vars.R * (latradval - c.vars.phi0),
+				heightvar / WGS84_avar,	-- really tempting to just make all charts -- even the 2D ones -- in meters.
+			}
+		end,
+	}),
 
 	-- https://en.wikipedia.org/wiki/Mercator_projection
-	(function()
-		local c = class(Chart)
-		c.name = 'Mercator'
-		c:buildVars{
-			{R = math.sqrt(.5)},
-		}
-		c:buildFunc{
-			c.vars.R * lonradval,
-			c.vars.R * symmath.log(symmath.tan(symmath.pi / 4 + latradval / 2)),
-			heightvar / WGS84_avar,
-		}
-		return c
-	end)(),
+	class(Chart, {
+		name = 'Mercator',
+		build = function(c)
+			c:buildVars{
+				{R = math.sqrt(.5)},
+			}
+			c:buildFunc{
+				c.vars.R * lonradval,
+				c.vars.R * symmath.log(symmath.tan(symmath.pi / 4 + latradval / 2)),
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
 
 	-- https://en.wikipedia.org/wiki/Gall%E2%80%93Peters_projection
-	(function()
-		local c = class(Chart)
-		c.name = 'Gall-Peters'
-		c:buildVars{
-			{R = .5},
-		}
-		c:buildFunc{
-			c.vars.R * lonradval,
-			2 * c.vars.R * symmath.sin(latradval),
-			heightvar / WGS84_avar,
-		}
-		return c
-	end)(),
+	class(Chart, {
+		name = 'Gall-Peters',
+		build = function(c)
+			c:buildVars{
+				{R = .5},
+			}
+			c:buildFunc{
+				c.vars.R * lonradval,
+				2 * c.vars.R * symmath.sin(latradval),
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
 
 	-- https://en.wikipedia.org/wiki/Lambert_cylindrical_equal-area_projection
-	(function()
-		local c = class(Chart)
-		c.name = 'Lambert cylindrical equal-area'
-		c:buildVars{
-			{lon0 = 0},
-		}
-		c:buildFunc{
-			1/symmath.sqrt(2) * (lonradval - c.vars.lon0 * symmath.pi / 180),
-			1/symmath.sqrt(2) * symmath.sin(latradval),
-			heightvar / WGS84_avar,
-		}
-		return c
-	end)(),
+	class(Chart, {
+		name = 'Lambert cylindrical equal-area',
+		build = function(c)
+			c:buildVars{
+				{lon0 = 0},
+			}
+			c:buildFunc{
+				1/symmath.sqrt(2) * (lonradval - c.vars.lon0 * symmath.pi / 180),
+				1/symmath.sqrt(2) * symmath.sin(latradval),
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
 
 	-- https://en.wikipedia.org/wiki/Azimuthal_equidistant_projection
-	(function()
-		local c = class(Chart)
-		c.name = 'Azimuthal equidistant'
-		c:buildVars{
-			{R = math.sqrt(.5)},
-		}
-		local azimuthalval = c.vars.R * (1 - latvar / 90)
-		c:buildFunc{
-			symmath.sin(lonradval) * azimuthalval,
-			-symmath.cos(lonradval) * azimuthalval,
-			heightvar / WGS84_avar,
-		}
-		return c
-	end)(),
+	class(Chart, {
+		name = 'Azimuthal equidistant',
+		build = function(c)
+			c:buildVars{
+				{R = math.sqrt(.5)},
+			}
+			local azimuthalval = c.vars.R * (1 - latvar / 90)
+			c:buildFunc{
+				symmath.sin(lonradval) * azimuthalval,
+				-symmath.cos(lonradval) * azimuthalval,
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
 
 	-- https://en.wikipedia.org/wiki/Lambert_azimuthal_equal-area_projection
-	(function()
-		local c = class(Chart)
-		c.name = 'Lambert azimuthal equal-area'
-		c:buildVars{
-			{R = math.sqrt(2)},
-		}
-		local colat = 90 - latvar	-- spherical friendly
-		local polarR = c.vars.R * symmath.sin(colat * symmath.pi / 360)
-		c:buildFunc{
-			symmath.sin(lonradval) * polarR,
-			-symmath.cos(lonradval) * polarR,
-			heightvar / WGS84_avar,
-		}
-		return c
-	end)(),
+	class(Chart, {
+		name = 'Lambert azimuthal equal-area',
+		build = function(c)
+			c:buildVars{
+				{R = math.sqrt(2)},
+			}
+			local colat = 90 - latvar	-- spherical friendly
+			local polarR = c.vars.R * symmath.sin(colat * symmath.pi / 360)
+			c:buildFunc{
+				symmath.sin(lonradval) * polarR,
+				-symmath.cos(lonradval) * polarR,
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
 
 	(function()
-		local c = {}
+		local c = class(Chart)
 		
 		c.name = 'Mollweide'
 	
@@ -514,9 +533,64 @@ local charts = {
 		
 		return c
 	end)(),
+
+	-- https://en.wikipedia.org/wiki/Sinusoidal_projection
+	class(Chart, {
+		name = 'Sinusoidal',
+		build = function(c)
+			c:buildVars{
+				{lon0 = 0},
+			}
+			c:buildFunc{
+				(lonvar - c.vars.lon0) * symmath.pi / 360 * symmath.cos(latradval),
+				latradval / 2,
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
+
+	-- https://en.wikipedia.org/wiki/Winkel_tripel_projection
+	class(Chart, {
+		name = 'Winkel tripel',
+		build = function(c)
+			c.normalizeBasisNumerically = true
+			c:buildVars{
+				{lat1 = 0},
+			}
+			local alpha = symmath.acos(symmath.cos(latradval) * symmath.cos(lonradval / 2))
+			-- TODO conditional? sinc(0) = 0 ...
+			local sincAlpha = symmath.sin(alpha) / alpha
+			c:buildFunc{
+				(
+					lonradval * symmath.cos(c.vars.lat1 * symmath.pi / 180) 
+					+ 2 * symmath.cos(latradval) * symmath.sin(lonradval / 2) / sincAlpha
+				) / 4,
+				(latradval + symmath.sin(latradval) / sincAlpha) / 4,
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
+
+	-- https://en.wikipedia.org/wiki/Kavrayskiy_VII_projection
+	class(Chart, {
+		name = 'Kavrayskiy VIII',
+		build = function(c)
+			c.normalizeBasisNumerically = true
+			c:buildVars()
+			local latnormval = latvar / 180	--[-1,1]
+			c:buildFunc{
+				lonradval * symmath.sqrt(symmath.frac(1,3) - latnormval * latnormval),
+				latradval,
+				heightvar / WGS84_avar,
+			}
+		end,
+	}),
 }
 for i=1,#charts do
-	local chart = charts[i]
-	charts[chart.name] = chart
+	local c = charts[i]
+	if c.build then
+		timer('building '..c.name, c.build, c)
+	end
+	charts[c.name] = c
 end
 return charts

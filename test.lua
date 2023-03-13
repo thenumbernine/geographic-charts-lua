@@ -13,7 +13,7 @@ local Image = require 'image'
 local matrix_ffi = require 'matrix.ffi'
 matrix_ffi.real = 'float'	-- default matrix_ffi type
 
-local allChartCode = require 'geographic-charts.code'
+local chartCode = require 'geographic-charts.code'
 -- TODO validate 'charts' fwd and inverse as well.
 --local charts = require 'geographic-charts'
 
@@ -106,7 +106,7 @@ glreport'here'
 		vertexCode = template([[
 #version 460
 
-<?=allChartCode?>
+<?=chartCode?>
 
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
@@ -149,13 +149,13 @@ void main() {
 }
 
 ]], 	{
-			allChartCode = allChartCode,
+			chartCode = chartCode,
 			chartNames = chartNames,
 		}),
 		fragmentCode = template([[
 #version 460
 
-<?=allChartCode?>
+<?=chartCode?>
 
 uniform sampler2D colorTex;
 
@@ -201,7 +201,7 @@ void main() {
 	fragColor = colorv * texture(colorTex, texcoordv);
 }
 ]],		{
-			allChartCode = allChartCode,
+			chartCode = chartCode,
 		}),
 		uniforms = {
 			colorTex = 0,

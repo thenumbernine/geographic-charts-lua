@@ -17,6 +17,10 @@ local allChartCode = require 'geographic-charts.code'
 -- TODO validate 'charts' fwd and inverse as well.
 --local charts = require 'geographic-charts'
 
+
+local earthtexfn = ... or 'earth-color.png'
+
+
 local App = require 'imguiapp.withorbit'()
 
 App.title = 'geographic chart demo'
@@ -71,7 +75,7 @@ function App:initGL(...)
 	-- so just resize offline
 	local image
 	timer('loading earth texture', function()
-		image = Image'earth-color.png'
+		image = Image(earthtexfn)
 	end)
 	local maxTextureSize = glget'GL_MAX_TEXTURE_SIZE'
 	if image.width > maxTextureSize
@@ -87,7 +91,7 @@ function App:initGL(...)
 glreport'here'
 	self.colorTex = GLTex2D{
 		image = image,
-		minFilter = gl.GL_LINEAR,
+		minFilter = gl.GL_LINEAR_MIPMAP_LINEAR,
 		magFilter = gl.GL_LINEAR,
 		generateMipmap = true,
 	}

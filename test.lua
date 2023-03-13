@@ -223,6 +223,7 @@ local vars = {
 	idivs = 100,
 	jdivs = 100,
 	normalizeWeights = true,
+	filterNearest = true,
 	zeroRoll = 0,
 	zeroLon = 0,
 	zeroLat = 0,
@@ -241,6 +242,13 @@ function App:update()
 	self.globeTexShader:setUniform('modelViewMatrix', self.modelViewMatrix.ptr)
 	self.globeTexShader:setUniform('projectionMatrix', self.projectionMatrix.ptr)
 	self.colorTex:bind()
+	if not vars.filterNearest then
+		self.colorTex:setParameter(gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
+		self.colorTex:setParameter(gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
+	else
+		self.colorTex:setParameter(gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR)
+		self.colorTex:setParameter(gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+	end
 	gl.glVertexAttrib4f(self.globeTexShader.attrs.color.loc, 1, 1, 1, 1)
 	for j=0,vars.jdivs-1 do
 		gl.glBegin(gl.GL_TRIANGLE_STRIP)
@@ -281,6 +289,7 @@ function App:updateGUI()
 		self.view.pos:set(0, 0, self.viewDist)
 	end
 	ig.luatableCheckbox('ortho', self.view, 'ortho')
+	ig.luatableCheckbox('filterNearest', vars, 'filterNearest')
 	ig.luatableInputInt('idivs', vars, 'idivs')
 	ig.luatableInputInt('jdivs', vars, 'jdivs')
 	ig.luatableSliderFloat('zeroLat', vars, 'zeroLat', -180, 180)

@@ -13,9 +13,9 @@ local Image = require 'image'
 local matrix_ffi = require 'matrix.ffi'
 matrix_ffi.real = 'float'	-- default matrix_ffi type
 
+local charts = require 'geographic-charts'
 local chartCode = require 'geographic-charts.code'
 -- TODO validate 'charts' fwd and inverse as well.
---local charts = require 'geographic-charts'
 
 
 local earthtexfn = ... or 'earth-color.png'
@@ -34,31 +34,7 @@ local function glget(k)
 	return int[0]
 end
 
-local chartNames = table{
-	-- 3D
-	'sphere',
-	'WGS84',
-	'cylinder',
-	-- 2D - rectangular
-	'Equirectangular',
-	'Mercator',
-	'Gall_Peters',
-	'Lambert_cylindrical_equal_area',
-	-- 2D - rect-ellipse
-	'Kavrayskiy_VIII',
-	'Winkel_tripel',
-	-- 2D - ellipse
-	'Mollweide',
-	-- 2D - pinched ellipse
-	'Sinusoidal',
-	-- 2D - circle
-	'Azimuthal_equidistant',
-	'Lambert_azimuthal_equal_area',
-	'Wiechel',
-	-- 2D - conic
-	'Albers',
-	'Bonne',
-}
+local chartNames = table.mapi(charts, function(c) return c:getCName() end)
 
 function App:initGL(...)
 	App.super.initGL(self, ...)

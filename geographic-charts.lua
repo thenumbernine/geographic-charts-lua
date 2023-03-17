@@ -800,24 +800,24 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 
 	--[[ TODO:
 	-- transverse Mercator ... just puts arctic at mid-top and antarctic at mid-bottom
-	-- https://en.wikipedia.org/wiki/Behrmann_projection
-	-- https://en.wikipedia.org/wiki/Eckert_IV_projection
+	-- https://en.wikipedia.org/wiki/Behrmann_projection ... formula not in wikipedia
+	-- https://en.wikipedia.org/wiki/Tobler_hyperelliptical_projection ... requires an integral of a power
+	-- https://en.wikipedia.org/wiki/Robinson_projection ... Robinson ... is an interpolation table-based
+	-- https://en.wikipedia.org/wiki/Lambert_equal-area_conic_projection ... Albers generalizes this
+	-- https://en.wikipedia.org/wiki/Eckert_IV_projection ... requires root-finding
 	-- https://en.wikipedia.org/wiki/Eckert_VI_projection
+	-- https://en.wikipedia.org/wiki/Eckert_II_projection
+	-- https://en.wikipedia.org/wiki/Eckert-Greifendorff_projection
 	-- https://en.wikipedia.org/wiki/Equal_Earth_projection
 	-- https://en.wikipedia.org/wiki/Hammer_projection
-	-- requires an integral of a power ... https://en.wikipedia.org/wiki/Tobler_hyperelliptical_projection
-	-- Robinson ... is an interpolation table-based: https://en.wikipedia.org/wiki/Robinson_projection
 	-- Stereographic
-	-- Albers generalizes this: https://en.wikipedia.org/wiki/Lambert_equal-area_conic_projection
 	-- https://en.wikipedia.org/wiki/Collignon_projection
-	-- https://en.wikipedia.org/wiki/Eckert_II_projection
 	-- https://en.wikipedia.org/wiki/Bottomley_projection
 	-- https://en.wikipedia.org/wiki/Werner_projection
 	-- https://en.wikipedia.org/wiki/Strebe_1995_projection
 	-- multiple slices
 	-- https://en.wikipedia.org/wiki/Boggs_eumorphic_projection
 	-- https://en.wikipedia.org/wiki/Goode_homolosine_projection
-	-- https://en.wikipedia.org/wiki/Eckert-Greifendorff_projection
 
 	--]]
 }

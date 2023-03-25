@@ -12,6 +12,8 @@ mathematician spherical coordinates: the longitude is θ and the latitude is φ 
 geographic / map charts: the longitude is λ and the latitude is φ ...
 so TODO change the calc_* stuff from r_θφ to h_φλ? idk ...
 
+really tempting to just make all charts -- even the 2D ones -- in meters.
+and make them in which coordinates?  xyz?
 --]]
 
 -- using geographic labels: lat = φ, lon = λ
@@ -35,8 +37,6 @@ local latradval = latvar * symmath.pi / 180
 local lonradval = lonvar * symmath.pi / 180
 
 local WGS84_a = 6378137	-- m ... earth equitorial radius
--- TODO global var and remove all WGS84_a's from the var lists (same idea as symmath.pi)
-local WGS84_avar = symmath.var'WGS84_a'
 
 -- tail-call transform list of fields into their values within 't'
 local function getfields(t, ...)
@@ -167,10 +167,26 @@ end
 -- TODO don't forget that GLSL is swapping the z-back for z-up
 -- TODO for a few of these (sphere, cylinder, etc) multiply the output by WGS84_a to put it in meters
 function Chart:basis(lat, lon, height)
-	local x,y,z = self.basisFunc(lat, lon, height, getfields(self, table.unpack(self.varnames)))
-	return vec3d(table.unpack(x)),
-			vec3d(table.unpack(y)),
-			vec3d(table.unpack(z))
+	if not self.basisFunc then
+		local delta = 1e-3
+		local x = (vec3d(self:chart(lat+delta, lon, height)) - vec3d(self:chart(lat-delta, lon, height))) * (1 / (2 * delta))
+		local y = (vec3d(self:chart(lat, lon+delta, height)) - vec3d(self:chart(lat, lon-delta, height))) * (1 / (2 * delta))
+		x = x:normalize()
+		y = y:normalize()
+		local z = -x:cross(y)
+		return x,y,z
+	else
+		local x,y,z = self.basisFunc(lat, lon, height, getfields(self, table.unpack(self.varnames)))
+		x = vec3d(table.unpack(x))
+		y = vec3d(table.unpack(y))
+		z = vec3d(table.unpack(z))
+		if self.normalizeBasisNumerically then
+			x = x:normalize()
+			y = y:normalize()
+			z = z:normalize()
+		end
+		return x,y,z
+	end
 end
 
 function Chart:updateGUI()
@@ -186,6 +202,7 @@ local charts = {
 		local c = class(Chart)
 
 		c.name = 'WGS84'
+		c.is3D = true
 
 		-- specific to WGS84:
 		c.a = WGS84_a
@@ -357,7 +374,7 @@ local charts = {
 			return [[
 
 //// MODULE_NAME: chart_WGS84
-//// MODULE_DEPENDS: M_PI perp2 rad WGS84_a
+//// MODULE_DEPENDS: xformZBackToZUp M_PI rad WGS84_a
 
 const float WGS84_b = 6356752.3142;	// polar radius
 const float WGS84_esq = 1. - WGS84_b * WGS84_b / (WGS84_a * WGS84_a);
@@ -393,11 +410,9 @@ vec3 chart_WGS84(vec3 x) {
 		NPlusH * cosTheta * sin(phi),
 		(N * (1. - WGS84_eccentricitySquared) + height) * sinTheta
 	);
-	// at this point we're in meters, matching the geographic-charts code
-	// but now I'm going to transform further to match the seismographic-visualization / geo-center-earth code
-	y /= WGS84_a;			//convert from meters to normalized coordinates
-	y.yz = -perp2(y.yz);	//rotate back so y is up
-	y.xz = perp2(y.xz);		//now rotate so prime meridian is along -z instead of +x
+	// at this point we're in meters
+	// now rotate back
+	y = xformZBackToZUp(y);
 	return y;
 }
 ]]
@@ -410,8 +425,10 @@ vec3 chart_WGS84(vec3 x) {
 		name = 'sphere',
 		is3D = true,
 		build = function(c)
-			c:buildVars()
-			local rval = heightvar / WGS84_avar + 1
+			c:buildVars{
+				{WGS84_a = WGS84_a},
+			}
+			local rval = heightvar + c.vars.WGS84_a
 			local thetaval = symmath.pi/2 - latradval
 			c:buildFunc{
 				rval * symmath.sin(thetaval) * symmath.cos(lonradval),
@@ -441,7 +458,7 @@ vec3 chartInv_sphere(vec3 pt) {
 	float r = length(pt);
 	float lonrad = atan(pt.y, pt.x);
 	float latrad = atan(pt.z, length(pt.xy));
-	float height = (r - 1.) * WGS84_a;
+	float height = r - WGS84_a;
 	return vec3(deg(latrad), deg(lonrad), height);
 }
 ]]
@@ -454,8 +471,10 @@ vec3 chartInv_sphere(vec3 pt) {
 		name = 'cylinder',
 		is3D = true,
 		build = function(c)
-			c:buildVars()
-			local rval = heightvar / WGS84_avar + 1
+			c:buildVars{
+				{WGS84_a = WGS84_a},
+			}
+			local rval = heightvar + c.vars.WGS84_a
 			c:buildFunc{
 				rval * symmath.cos(lonradval),
 				rval * symmath.sin(lonradval),
@@ -474,11 +493,12 @@ vec3 chartInv_sphere(vec3 pt) {
 				{lambda0 = 0},
 				{phi0 = 0},
 				{phi1 = 0},
+				{WGS84_a = WGS84_a},
 			}
 			c:buildFunc{
-				c.vars.R * (lonradval - c.vars.lambda0) * symmath.cos(c.vars.phi1),
-				c.vars.R * (latradval - c.vars.phi0),
-				heightvar / WGS84_avar,	-- really tempting to just make all charts -- even the 2D ones -- in meters.
+				c.vars.WGS84_a * c.vars.R * (lonradval - c.vars.lambda0) * symmath.cos(c.vars.phi1),
+				c.vars.WGS84_a * c.vars.R * (latradval - c.vars.phi0),
+				heightvar,
 			}
 		end,
 	}),
@@ -489,6 +509,7 @@ vec3 chartInv_sphere(vec3 pt) {
 		build = function(c)
 			c:buildVars{
 				{R = math.sqrt(.5)},
+				{WGS84_a = WGS84_a},
 			}
 			-- TODO
 			-- Mercator is defined so that at phi=-pi/2 and phi=pi/2 the y -> infinity
@@ -497,11 +518,11 @@ vec3 chartInv_sphere(vec3 pt) {
 			-- until then, just scale by 1-eps
 			local eps = 1e-2
 			c:buildFunc{
-				c.vars.R * lonradval,
-				c.vars.R * symmath.log(
+				c.vars.WGS84_a * c.vars.R * lonradval,
+				c.vars.WGS84_a * c.vars.R * symmath.log(
 					eps + symmath.tan((1-eps) * symmath.pi * (90 + latvar) / 360)
 				),
-				heightvar / WGS84_avar,
+				heightvar,
 			}
 		end,
 	}),
@@ -512,11 +533,12 @@ vec3 chartInv_sphere(vec3 pt) {
 		build = function(c)
 			c:buildVars{
 				{R = .5},
+				{WGS84_a = WGS84_a},
 			}
 			c:buildFunc{
-				c.vars.R * lonradval,
-				2 * c.vars.R * symmath.sin(latradval),
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * c.vars.R * lonradval,
+				c.vars.WGS84_a * c.vars.R * 2 * symmath.sin(latradval),
+				heightvar,
 			}
 		end,
 	}),
@@ -527,11 +549,12 @@ vec3 chartInv_sphere(vec3 pt) {
 		build = function(c)
 			c:buildVars{
 				{lon0 = 0},
+				{WGS84_a = WGS84_a},
 			}
 			c:buildFunc{
-				1/symmath.sqrt(2) * (lonradval - c.vars.lon0 * symmath.pi / 180),
-				1/symmath.sqrt(2) * symmath.sin(latradval),
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * 1/symmath.sqrt(2) * (lonradval - c.vars.lon0 * symmath.pi / 180),
+				c.vars.WGS84_a * 1/symmath.sqrt(2) * symmath.sin(latradval),
+				heightvar,
 			}
 		end,
 	}),
@@ -553,12 +576,13 @@ vec3 chartInv_sphere(vec3 pt) {
 		build = function(c)
 			c:buildVars{
 				{R = math.sqrt(.5)},
+				{WGS84_a = WGS84_a},
 			}
 			local azimuthalval = c.vars.R * (1 - latvar / 90)
 			c:buildFunc{
-				symmath.sin(lonradval) * azimuthalval,
-				-symmath.cos(lonradval) * azimuthalval,
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * symmath.sin(lonradval) * azimuthalval,
+				c.vars.WGS84_a * -symmath.cos(lonradval) * azimuthalval,
+				heightvar,
 			}
 		end,
 	}),
@@ -569,13 +593,14 @@ vec3 chartInv_sphere(vec3 pt) {
 		build = function(c)
 			c:buildVars{
 				{R = math.sqrt(2)},
+				{WGS84_a = WGS84_a},
 			}
 			local colat = 90 - latvar	-- spherical friendly
 			local polarR = c.vars.R * symmath.sin(colat * symmath.pi / 360)
 			c:buildFunc{
-				symmath.sin(lonradval) * polarR,
-				-symmath.cos(lonradval) * polarR,
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * symmath.sin(lonradval) * polarR,
+				c.vars.WGS84_a * -symmath.cos(lonradval) * polarR,
+				heightvar,
 			}
 		end,
 	}),
@@ -609,8 +634,8 @@ vec3 chartInv_sphere(vec3 pt) {
 					theta = theta - dtheta
 				end
 			end
-			local mollweidex = self.R * math.sqrt(8) / math.pi * (lambda - self.lambda0) * math.cos(theta)
-			local mollweidey = self.R * math.sqrt(2) * math.sin(theta)
+			local mollweidex = WGS84_a * self.R * math.sqrt(8) / math.pi * (lambda - self.lambda0) * math.cos(theta)
+			local mollweidey = WGS84_a * self.R * math.sqrt(2) * math.sin(theta)
 			local mollweidez = height
 			if not math.isfinite(mollweidex) then mollweidex = 0 end
 			if not math.isfinite(mollweidey) then mollweidey = 0 end
@@ -653,9 +678,9 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 			theta -= dtheta;
 		}
 	}
-	float x = Mollweide_R * 2. * M_SQRT_2 / M_PI * (lambda - Mollweide_lambda0) * cos(theta);
-	float y = Mollweide_R * M_SQRT_2 * sin(theta);
-	float z = height / WGS84_a;
+	float x = WGS84_a * Mollweide_R * 2. * M_SQRT_2 / M_PI * (lambda - Mollweide_lambda0) * cos(theta);
+	float y = WGS84_a * Mollweide_R * M_SQRT_2 * sin(theta);
+	float z = height;
 	if (!isfinite(x)) x = 0;
 	if (!isfinite(y)) y = 0;
 	if (!isfinite(z)) z = 0;
@@ -674,11 +699,12 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 		build = function(c)
 			c:buildVars{
 				{lon0 = 0},
+				{WGS84_a = WGS84_a},
 			}
 			c:buildFunc{
-				(lonvar - c.vars.lon0) * symmath.pi / 360 * symmath.cos(latradval),
-				latradval / 2,
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * (lonvar - c.vars.lon0) * symmath.pi / 360 * symmath.cos(latradval),
+				c.vars.WGS84_a * latradval / 2,
+				heightvar,
 			}
 		end,
 	}),
@@ -690,6 +716,7 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 		build = function(c)
 			c:buildVars{
 				{lat1 = 0},
+				{WGS84_a = WGS84_a},
 			}
 
 			-- TODO move this to symmath?
@@ -704,12 +731,12 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 			local alpha = symmath.acos(symmath.cos(latradval) * symmath.cos(lonradval / 2))
 			local sincAlpha = sinc(alpha)
 			c:buildFunc{
-				(
+				c.vars.WGS84_a * (
 					lonradval * symmath.cos(c.vars.lat1 * symmath.pi / 180)
 					+ 2 * symmath.cos(latradval) * symmath.sin(lonradval / 2) / sincAlpha
 				) / 4,
-				(latradval + symmath.sin(latradval) / sincAlpha) / 4,
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * (latradval + symmath.sin(latradval) / sincAlpha) / 4,
+				heightvar,
 			}
 		end,
 	}),
@@ -719,12 +746,14 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 		name = 'Kavrayskiy VIII',
 		normalizeBasisNumerically = true,
 		build = function(c)
-			c:buildVars()
+			c:buildVars{
+				{WGS84_a = WGS84_a},
+			}
 			local latnormval = latvar / 180	--[-1,1]
 			c:buildFunc{
-				lonradval * symmath.sqrt(symmath.frac(1,3) - latnormval * latnormval),
-				latradval,
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * lonradval * symmath.sqrt(symmath.frac(1,3) - latnormval * latnormval),
+				c.vars.WGS84_a * latradval,
+				heightvar,
 			}
 		end,
 	}),
@@ -735,15 +764,16 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 		build = function(c)
 			c:buildVars{
 				{R = math.sqrt(2)},
+				{WGS84_a = WGS84_a},
 			}
 			local coslon = symmath.cos(lonradval)
 			local coslat = symmath.cos(latradval)
 			local sinlon = symmath.sin(lonradval)
 			local sinlat = symmath.sin(latradval)
 			c:buildFunc{
-				c.vars.R / 2 * (sinlon * coslat - (1 - sinlat) * coslon),
-				-c.vars.R / 2 * (coslon * coslat + (1 - sinlat) * sinlon),
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * c.vars.R / 2 * (sinlon * coslat - (1 - sinlat) * coslon),
+				c.vars.WGS84_a * c.vars.R / 2 * -(coslon * coslat + (1 - sinlat) * sinlon),
+				heightvar,
 			}
 		end,
 	}),
@@ -759,6 +789,7 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 				{lat2 = 45},
 				{lon0 = 0},
 				{lat0 = 0},
+				{WGS84_a = WGS84_a},
 			}
 			local lat1rad = c.vars.lat1 * symmath.pi / 180
 			local lat2rad = c.vars.lat2 * symmath.pi / 180
@@ -770,9 +801,9 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 			local theta = n * (lonradval - lon0rad)
 			local rho = c.vars.R / n * symmath.sqrt(C - 2 * n * symmath.sin(latradval))
 			c:buildFunc{
-				rho * symmath.sin(theta),
-				rho0 - rho * symmath.cos(theta),
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * rho * symmath.sin(theta),
+				c.vars.WGS84_a * (rho0 - rho * symmath.cos(theta)),
+				heightvar,
 			}
 		end,
 	}),
@@ -785,16 +816,20 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 			c:buildVars{
 				{lon0 = 0},
 				{lat1 = 45},
+				{WGS84_a = WGS84_a},
 			}
 			local lon0rad = c.vars.lon0 * symmath.pi / 180
 			local lat1rad = c.vars.lat1 * symmath.pi / 180
 			local rho = 1 / symmath.tan(lat1rad) + lat1rad - latradval
 			local E = (lonradval - lon0rad) * symmath.cos(latradval) / rho
 			c:buildFunc{
-				rho * symmath.sin(E),
-				1 / symmath.tan(lat1rad) - rho * symmath.cos(E),
-				heightvar / WGS84_avar,
+				c.vars.WGS84_a * rho * symmath.sin(E),
+				c.vars.WGS84_a * (1 / symmath.tan(lat1rad) - rho * symmath.cos(E)),
+				heightvar,
 			}
+		end,
+		basis = function(c, lat, lon, height)
+			return vec3d(1,0,0), vec3d(0,1,0), vec3d(0,0,1)
 		end,
 	}),
 
@@ -828,4 +863,5 @@ for i=1,#charts do
 	end
 	charts[c.name] = c
 end
+charts.WGS84_a = WGS84_a
 return charts

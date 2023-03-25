@@ -9,6 +9,7 @@ local GLProgram = require 'gl.program'
 local glreport = require 'gl.report'
 local ig = require 'imgui'
 local Image = require 'image'
+local vec3d = require 'vec-ffi.vec3d'
 
 local matrix_ffi = require 'matrix.ffi'
 matrix_ffi.real = 'float'	-- default matrix_ffi type
@@ -33,6 +34,14 @@ local function glget(k)
 	gl.glGetIntegerv(assert(gl[k]), int);
 	return int[0]
 end
+
+-- [[ Winkel tripel uses sinc ... I've got it hooked up to GLSL but not yet to Lua
+charts = table.map(charts, function(c,k,t)
+	if type(c) == 'table' and c.name == 'Winkel tripel' then return end
+	if type(k) == 'number' then return c, #t+1 end
+	return c, k
+end)
+--]]
 
 local chartNames = table.mapi(charts, function(c) return c:getCName() end)
 
@@ -116,6 +125,9 @@ void main() {
 ?>		+ weight_<?=name?> * chart_<?=name?>(vertex)
 <? end
 ?>	;
+	
+	//from meters to normalized coordinates
+	pos /= WGS84_a;
 
 	gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.));
 	colorv = color;
@@ -203,9 +215,17 @@ local vars = {
 	zeroRoll = 0,
 	zeroLon = 0,
 	zeroLat = 0,
+	pick = false,
+	pickLon = 0,
+	pickLat = 0,
 }
 for _,field in ipairs(weightFields) do
 	vars[field] = field == 'weight_Equirectangular' and 1 or 0
+end
+
+local function fix3D(v)
+	v.y, v.z = v.z, -v.y
+	v.x, v.z = -v.z, v.x
 end
 
 function App:update()
@@ -251,12 +271,57 @@ function App:update()
 	self.colorTex:unbind()
 	self.globeTexShader:useNone()
 
+	do
+		local pickHeight = 0
+		local colors = table{
+			{1,0,0},
+			{0,1,0},
+			{0,0,1},
+		}
+		local pos = vec3d(0,0,0)
+		local bs = {
+			vec3d(0,0,0),
+			vec3d(0,0,0),
+			vec3d(0,0,0),
+		}
+		for i=1,#chartNames do
+			local c = charts[i]
+			local w = vars[weightFields[i]]
+			local chartPos = vec3d(c:chart(vars.pickLat, vars.pickLon, pickHeight))
+			local cbx, cby, cbz = c:basis(vars.pickLat, vars.pickLon, pickHeight)
+			if c.is3D then	-- xformZBackToZUp: same transform as the GLSL 3D -> 2D
+				fix3D(chartPos)
+				fix3D(cbx)
+				fix3D(cby)
+				fix3D(cbz)
+			end
+			pos = pos + chartPos * w
+			bs[1] = bs[1] + cbx * w
+			bs[2] = bs[2] + cby * w
+			bs[3] = bs[3] + cbz * w
+		end
+		
+		for i=1,3 do
+			bs[i] = bs[i]:normalize()
+		end
+		pos = pos + bs[3] * 1e-3	--(1 / charts.WGS84_a)
+
+		local len = .1
+		gl.glBegin(gl.GL_LINES)
+		for i,b in ipairs(bs) do
+			gl.glColor3f(table.unpack(colors[i]))
+			gl.glVertex3f(pos.x, pos.y, pos.z)
+			gl.glVertex3f(pos.x+b.x*len, pos.y+b.y*len, pos.z+b.z*len)
+		end
+		gl.glEnd()
+	end
 
 	App.super.update(self)
 glreport'here'
 end
 
 function App:updateGUI()
+	ig.igText'view:'
 	if ig.igButton'reset view' then
 		self.view.ortho = true
 		self.view.orthoSize = self.viewOrthoSize
@@ -265,12 +330,19 @@ function App:updateGUI()
 		self.view.pos:set(0, 0, self.viewDist)
 	end
 	ig.luatableCheckbox('ortho', self.view, 'ortho')
-	ig.luatableCheckbox('filterNearest', vars, 'filterNearest')
+	ig.igText'resolution:'
 	ig.luatableInputInt('idivs', vars, 'idivs')
 	ig.luatableInputInt('jdivs', vars, 'jdivs')
+	ig.luatableCheckbox('filterNearest', vars, 'filterNearest')
+	ig.igText'orientation:'
 	ig.luatableSliderFloat('zeroLat', vars, 'zeroLat', -180, 180)
 	ig.luatableSliderFloat('zeroLon', vars, 'zeroLon', -180, 180)
 	ig.luatableSliderFloat('zeroRoll', vars, 'zeroRoll', -180, 180)
+	ig.igText'pick:'
+	ig.luatableCheckbox('pick', vars, 'pick')
+	ig.luatableInputFloat('pickLon', vars, 'pickLon')
+	ig.luatableInputFloat('pickLat', vars, 'pickLat')
+	ig.igText'weights:'
 	ig.luatableCheckbox('normalize weights', vars, 'normalizeWeights')
 	local changed
 	for _,field in ipairs(weightFields) do

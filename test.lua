@@ -239,11 +239,13 @@ function App:update()
 	self.globeTexShader:setUniform('projectionMatrix', self.projectionMatrix.ptr)
 	self.colorTex:bind()
 	if not vars.filterNearest then
-		self.colorTex:setParameter(gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
-		self.colorTex:setParameter(gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
+		self.colorTex
+			:setParameter(gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
+			:setParameter(gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
 	else
-		self.colorTex:setParameter(gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR)
-		self.colorTex:setParameter(gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+		self.colorTex
+			:setParameter(gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR)
+			:setParameter(gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
 	end
 	gl.glVertexAttrib4f(self.globeTexShader.attrs.color.loc, 1, 1, 1, 1)
 	for j=0,vars.jdivs-1 do

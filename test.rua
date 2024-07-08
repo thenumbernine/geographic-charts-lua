@@ -34,8 +34,8 @@ end
 
 -- [[ Winkel tripel uses sinc ... I've got it hooked up to GLSL but not yet to Lua
 charts = table.map(charts, [c,k,t] 
-	type(c) == 'table' and c.name == 'Winkel tripel' ?? nil
-		: type(k) == 'number' ?? (c, #t+1) : (c, k)
+	type(c) == 'table' and c.name == 'Winkel tripel' ? nil
+		: type(k) == 'number' ? (c, #t+1) : (c, k)
 )
 --]]
 
@@ -213,7 +213,7 @@ local vars = {
 	pickLat = 0,
 }
 for _,field in ipairs(weightFields) do
-	vars[field] = field == 'weight_Equirectangular' ?? 1 : 0
+	vars[field] = field == 'weight_Equirectangular' ? 1 : 0
 end
 
 local fix3D = [v] do

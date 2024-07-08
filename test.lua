@@ -1,8 +1,8 @@
 #!/usr/bin/env luajit
 local ffi = require 'ffi'
-local template = require 'template'
 local table = require 'ext.table'
 local timer = require 'ext.timer'
+local template = require 'template'
 local gl = require 'gl'
 local GLTex2D = require 'gl.tex2d'
 local GLProgram = require 'gl.program'

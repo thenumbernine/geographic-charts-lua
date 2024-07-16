@@ -23,6 +23,7 @@ local math = require 'ext.math'
 local timer = require 'ext.timer'
 local vec3d = require 'vec-ffi.vec3d'
 local symmath = require 'symmath'
+local clnumber = require 'cl.obj.number'
 
 -- input
 local latvar = symmath.var'lat'
@@ -128,7 +129,7 @@ end
 function Chart:getGLSLFunc()
 	local escname = self:getCName()
 	return self.varnames:mapi(function(k)
-		return 'const float '..escname..'_'..k..' = '..self[k]..';'
+		return 'const float '..escname..'_'..k..' = '..clnumber(self[k])..';'
 	end):append{
 		'vec3 '..self:getSymbol()..'(vec3 latLonHeight) {',
 		self:getGLSLBody(),
@@ -141,7 +142,7 @@ end
 function Chart:getGLSLFunc3D()
 	local escname = self:getCName()
 	return self.varnames:mapi(function(k)
-		return 'const float '..escname..'_'..k..' = '..self[k]..';'
+		return 'const float '..escname..'_'..k..' = '..clnumber(self[k])..';'
 	end):append{
 		'vec3 '..self:getSymbol()..'(vec3 latLonHeight) {',
 		self:getGLSLBody(),
@@ -681,9 +682,9 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 	float x = WGS84_a * Mollweide_R * 2. * M_SQRT_2 / M_PI * (lambda - Mollweide_lambda0) * cos(theta);
 	float y = WGS84_a * Mollweide_R * M_SQRT_2 * sin(theta);
 	float z = height;
-	if (!isfinite(x)) x = 0;
-	if (!isfinite(y)) y = 0;
-	if (!isfinite(z)) z = 0;
+	if (!isfinite(x)) x = 0.;
+	if (!isfinite(y)) y = 0.;
+	if (!isfinite(z)) z = 0.;
 	return vec3(x, y, z);
 }
 

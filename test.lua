@@ -1,5 +1,6 @@
 #!/usr/bin/env luajit
 local ffi = require 'ffi'
+local op = require 'ext.op'
 local table = require 'ext.table'
 local timer = require 'ext.timer'
 local template = require 'template'
@@ -11,8 +12,6 @@ local ig = require 'imgui'
 local Image = require 'image'
 local vec3d = require 'vec-ffi.vec3d'
 
-local matrix_ffi = require 'matrix.ffi'
-matrix_ffi.real = 'float'	-- default matrix_ffi type
 
 local charts = require 'geographic-charts'
 local chartCode = require 'geographic-charts.code'
@@ -25,6 +24,7 @@ local earthtexfn = ... or 'earth-color.png'
 local App = require 'imguiapp.withorbit'()
 
 App.title = 'geographic chart demo'
+App.viewUseBuiltinMatrixMath = true
 App.viewDist = 1.6
 App.viewOrthoSize = 2	-- TODO assign in glapp.view
 
@@ -45,13 +45,14 @@ end)
 
 local chartNames = table.mapi(charts, function(c) return c:getCName() end)
 
+local hasPointSmooth = op.safeindex(gl, 'GL_POINT_SMOOTH')
 function App:initGL(...)
 	App.super.initGL(self, ...)
 	self.view.ortho = true
 	self.view.orthoSize = self.viewOrthoSize
 
 	gl.glEnable(gl.GL_DEPTH_TEST)
-	gl.glEnable(gl.GL_POINT_SMOOTH)
+	if hasPointSmooth then gl.glEnable(gl.GL_POINT_SMOOTH) end	-- not in es
 	gl.glEnable(gl.GL_BLEND)
 	gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
@@ -83,9 +84,6 @@ glreport'here'
 glreport'here'
 	GLTex2D:unbind()
 glreport'here'
-
-	self.modelViewMatrix = matrix_ffi.zeros{4,4}
-	self.projectionMatrix = matrix_ffi.zeros{4,4}
 
 	self.globeTexShader = GLProgram{
 		version = 'latest',
@@ -229,12 +227,10 @@ end
 function App:update()
 	gl.glClearColor(0, 0, 0, 1)
 	gl.glClear(bit.bor(gl.GL_COLOR_BUFFER_BIT, gl.GL_DEPTH_BUFFER_BIT))
-	gl.glGetFloatv(gl.GL_MODELVIEW_MATRIX, self.modelViewMatrix.ptr)
-	gl.glGetFloatv(gl.GL_PROJECTION_MATRIX, self.projectionMatrix.ptr)
 	self.globeTexShader:use()
 	self.globeTexShader:setUniforms(vars)
-	self.globeTexShader:setUniform('modelViewMatrix', self.modelViewMatrix.ptr)
-	self.globeTexShader:setUniform('projectionMatrix', self.projectionMatrix.ptr)
+	self.globeTexShader:setUniform('modelViewMatrix', self.view.mvMat.ptr)
+	self.globeTexShader:setUniform('projectionMatrix', self.view.projMat.ptr)
 	self.colorTex:bind()
 	if not vars.filterNearest then
 		self.colorTex

@@ -88,9 +88,9 @@ glreport'here'
 	self.projectionMatrix = matrix_ffi.zeros{4,4}
 
 	self.globeTexShader = GLProgram{
+		version = 'latest',
+		header = 'precision highp float;',
 		vertexCode = template([[
-#version 460
-
 <?=chartCode?>
 
 uniform mat4 modelViewMatrix;
@@ -141,8 +141,6 @@ void main() {
 			chartNames = chartNames,
 		}),
 		fragmentCode = template([[
-#version 460
-
 <?=chartCode?>
 
 uniform sampler2D colorTex;

@@ -4,9 +4,12 @@ local op = require 'ext.op'
 local table = require 'ext.table'
 local timer = require 'ext.timer'
 local template = require 'template'
+local vec3f = require 'vec-ffi.vec3f'
+local vector = require 'ffi.cpp.vector-lua'
 local gl = require 'gl'
 local GLTex2D = require 'gl.tex2d'
 local GLProgram = require 'gl.program'
+local GLSceneObject = require 'gl.sceneobject'
 local glreport = require 'gl.report'
 local ig = require 'imgui'
 local Image = require 'image'
@@ -80,10 +83,7 @@ glreport'here'
 		minFilter = gl.GL_LINEAR_MIPMAP_LINEAR,
 		magFilter = gl.GL_LINEAR,
 		generateMipmap = true,
-	}
-glreport'here'
-	GLTex2D:unbind()
-glreport'here'
+	}:unbind()
 
 	self.globeTexShader = GLProgram{
 		version = 'latest',
@@ -101,9 +101,6 @@ uniform mat4 projectionMatrix;
 
 
 in vec3 vertex;
-in vec4 color;
-
-out vec4 colorv;
 
 //3D space point that's gonna be used for texturing
 // interpolate in 3D so we don't get weird artifats in the texcoord lookup where the texcoords wrap around
@@ -128,7 +125,6 @@ void main() {
 	pos /= WGS84_a;
 
 	gl_Position = projectionMatrix * (modelViewMatrix * vec4(pos, 1.));
-	colorv = color;
 
 	// ok here ... (lat, lon) to sphere
 	texcoordptv = chart_sphere(vertex);
@@ -146,8 +142,8 @@ uniform sampler2D colorTex;
 uniform float zeroRoll;
 uniform float zeroLon;
 uniform float zeroLat;
+uniform vec4 color;
 
-in vec4 colorv;
 in vec3 texcoordptv;
 
 out vec4 fragColor;
@@ -182,7 +178,7 @@ void main() {
 	float unitLonFrac = (lon + 180.) / 360.;
 
 	vec2 texcoordv = vec2(unitLonFrac, aziFrac);
-	fragColor = colorv * texture(colorTex, texcoordv);
+	fragColor = color * texture(colorTex, texcoordv);
 }
 ]],		{
 			chartCode = chartCode,
@@ -190,14 +186,61 @@ void main() {
 		uniforms = {
 			colorTex = 0,
 		},
-	}
+	}:useNone()
 glreport'here'
-	self.globeTexShader:useNone()
-glreport'here'
-	GLTex2D:unbind()
-glreport'here'
-end
 
+	self.lineCPUBuf = vector'vec3f_t'
+	self.lineObj = GLSceneObject{
+		program = {
+			version = 'latest',
+			header = 'precision highp float;',
+			vertexCode = [[
+in vec3 vtx;
+in vec3 color;
+out vec3 colorv;
+uniform mat4 mvMat, projMat;
+void main() {
+	colorv = color;
+	gl_Position = projMat * (mvMat * vec4(vtx, 1.));
+}
+]],
+			fragmentCode = [[
+in vec3 colorv;
+out vec4 fragColor;
+void main() {
+	fragColor = vec4(colorv, 1.);
+}
+]],
+		},
+		geometry = {
+			mode = gl.GL_LINES,
+			count = 6,
+		},
+		attrs = {
+			vtx = {
+				buffer = {
+					data = self.lineCPUBuf.v,
+					size = ffi.sizeof'vec3f_t' * #self.lineCPUBuf,
+					count = #self.lineCPUBuf,
+				},
+			},
+			color = {
+				buffer = {
+					data = {
+						1,0,0,
+						1,0,0,
+						0,1,0,
+						0,1,0,
+						0,0,1,
+						0,0,1,
+					},
+				},
+			},
+		},
+	}
+
+	self:refreshGlobeObj()
+end
 
 local weightFields = chartNames:mapi(function(name)
 	return 'weight_'..name
@@ -219,6 +262,53 @@ for _,field in ipairs(weightFields) do
 	vars[field] = field == 'weight_Equirectangular' and 1 or 0
 end
 
+function App:refreshGlobeObj()
+	-- TODO just resize the buffers, don't rebuild them
+	-- but I'm lazy so
+	-- also webgl's indexed geom is messing up.  fuckin webgl always... works fine in gles too.
+	self.globeStripVtxCPUBufs = table()
+	self.globeStripObjs = table()
+	for j=0,vars.jdivs-1 do
+		local globeVtxCPUBuf = vector'vec3f_t'
+		self.globeStripVtxCPUBufs:insert(globeVtxCPUBuf)
+		for i=0,vars.idivs do
+			local aziFrac = i/vars.idivs
+			local azimuthal = aziFrac * math.pi-- azimuthal angle
+			local latrad = .5*math.pi - azimuthal	-- latitude
+			local lat = math.deg(latrad)
+
+			local unitLonFrac = (j+1)/vars.jdivs
+			local lonFrac = unitLonFrac - .5
+			local lonrad = lonFrac * 2 * math.pi			-- longitude
+			local lon = math.deg(lonrad)
+			globeVtxCPUBuf:emplace_back()[0]:set(lat, lon, 0)
+
+			local unitLonFrac = j/vars.jdivs
+			local lonFrac = unitLonFrac - .5
+			local lonrad = lonFrac * 2 * math.pi			-- longitude
+			local lon = math.deg(lonrad)
+			globeVtxCPUBuf:emplace_back()[0]:set(lat, lon, 0)
+		end
+		self.globeStripObjs:insert(GLSceneObject{
+			program = self.globeTexShader,
+			texs = {self.colorTex},
+			geometry = {
+				mode = gl.GL_TRIANGLE_STRIP,
+				count = 2 * (vars.idivs+1),
+			},
+			attrs = {
+				vertex = {
+					buffer = {
+						data = globeVtxCPUBuf.v,
+						size = ffi.sizeof'vec3f_t' * #globeVtxCPUBuf,
+						count = #globeVtxCPUBuf,
+					},
+				},
+			},
+		})
+	end
+end
+
 local function fix3D(v)
 	v.y, v.z = v.z, -v.y
 	v.x, v.z = -v.z, v.x
@@ -231,6 +321,8 @@ function App:update()
 	self.globeTexShader:setUniforms(vars)
 	self.globeTexShader:setUniform('modelViewMatrix', self.view.mvMat.ptr)
 	self.globeTexShader:setUniform('projectionMatrix', self.view.projMat.ptr)
+	self.globeTexShader:setUniform('color', {1, 1, 1, 1})
+	self.globeTexShader:useNone()
 	self.colorTex:bind()
 	if not vars.filterNearest then
 		self.colorTex
@@ -241,39 +333,13 @@ function App:update()
 			:setParameter(gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR)
 			:setParameter(gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
 	end
-	gl.glVertexAttrib4f(self.globeTexShader.attrs.color.loc, 1, 1, 1, 1)
-	for j=0,vars.jdivs-1 do
-		gl.glBegin(gl.GL_TRIANGLE_STRIP)
-		for i=0,vars.idivs do
-			local aziFrac = i/vars.idivs
-			local azimuthal = aziFrac * math.pi-- azimuthal angle
-			local latrad = .5*math.pi - azimuthal	-- latitude
-			local lat = math.deg(latrad)
-
-			local unitLonFrac = (j+1)/vars.jdivs
-			local lonFrac = unitLonFrac - .5
-			local lonrad = lonFrac * 2 * math.pi			-- longitude
-			local lon = math.deg(lonrad)
-			gl.glVertexAttrib3f(self.globeTexShader.attrs.vertex.loc, lat, lon, 0)
-
-			local unitLonFrac = j/vars.jdivs
-			local lonFrac = unitLonFrac - .5
-			local lonrad = lonFrac * 2 * math.pi			-- longitude
-			local lon = math.deg(lonrad)
-			gl.glVertexAttrib3f(self.globeTexShader.attrs.vertex.loc, lat, lon, 0)
-		end
-		gl.glEnd()
-	end
 	self.colorTex:unbind()
-	self.globeTexShader:useNone()
+	for _,obj in ipairs(self.globeStripObjs) do
+		obj:draw()
+	end
 
 	do
 		local pickHeight = 0
-		local colors = table{
-			{1,0,0},
-			{0,1,0},
-			{0,0,1},
-		}
 		local pos = vec3d(0,0,0)
 		local bs = {
 			vec3d(0,0,0),
@@ -303,13 +369,15 @@ function App:update()
 		pos = pos + bs[3] * 1e-3	--(1 / charts.WGS84_a)
 
 		local len = .1
-		gl.glBegin(gl.GL_LINES)
 		for i,b in ipairs(bs) do
-			gl.glColor3f(table.unpack(colors[i]))
-			gl.glVertex3f(pos.x, pos.y, pos.z)
-			gl.glVertex3f(pos.x+b.x*len, pos.y+b.y*len, pos.z+b.z*len)
+			self.lineCPUBuf.v[(i-1)*2+0]:set(pos:unpack())
+			self.lineCPUBuf.v[(i-1)*2+1]:set(pos.x+b.x*len, pos.y+b.y*len, pos.z+b.z*len)
 		end
-		gl.glEnd()
+		self.lineObj.attrs.vtx.buffer
+			:bind()
+			:updateData()
+			:unbind()
+		self.lineObj:draw()
 	end
 
 	App.super.update(self)
@@ -327,8 +395,12 @@ function App:updateGUI()
 	end
 	ig.luatableCheckbox('ortho', self.view, 'ortho')
 	ig.igText'resolution:'
-	ig.luatableInputInt('idivs', vars, 'idivs')
-	ig.luatableInputInt('jdivs', vars, 'jdivs')
+	if ig.luatableInputInt('idivs', vars, 'idivs') then
+		self:refreshGlobeObj()
+	end
+	if ig.luatableInputInt('jdivs', vars, 'jdivs') then
+		self:refreshGlobeObj()
+	end
 	ig.luatableCheckbox('filterNearest', vars, 'filterNearest')
 	ig.igText'orientation:'
 	ig.luatableSliderFloat('zeroLat', vars, 'zeroLat', -180, 180)

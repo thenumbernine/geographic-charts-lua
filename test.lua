@@ -281,13 +281,24 @@ function App:refreshGlobeObj()
 			local lonFrac = unitLonFrac - .5
 			local lonrad = lonFrac * 2 * math.pi			-- longitude
 			local lon = math.deg(lonrad)
+			--[[ webgl version complaining about writing outside of memory ...
 			globeVtxCPUBuf:emplace_back()[0]:set(lat, lon, 0)
+			--]]
+			--[[ same
+			local v = globeVtxCPUBuf:emplace_back()
+			v[0]:set(lat, lon, 0)
+			--]]
+			-- [[ same but dif error.  this worked fine in the n-points demo ... or did it? maybe that's why the indexes were screwing up ...
+			local v = globeVtxCPUBuf:emplace_back()
+			v[0] = vec3f(lat, lon, 0)
+			--]]
 
 			local unitLonFrac = j/vars.jdivs
 			local lonFrac = unitLonFrac - .5
 			local lonrad = lonFrac * 2 * math.pi			-- longitude
 			local lon = math.deg(lonrad)
-			globeVtxCPUBuf:emplace_back()[0]:set(lat, lon, 0)
+			local v = globeVtxCPUBuf:emplace_back()
+			v[0] = vec3f(lat, lon, 0)
 		end
 		self.globeStripObjs:insert(GLSceneObject{
 			program = self.globeTexShader,

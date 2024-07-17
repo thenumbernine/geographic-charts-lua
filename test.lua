@@ -77,7 +77,6 @@ function App:initGL(...)
 		end)
 	end
 
-glreport'here'
 	self.colorTex = GLTex2D{
 		image = image,
 		minFilter = gl.GL_LINEAR_MIPMAP_LINEAR,
@@ -292,18 +291,14 @@ function App:refreshGlobeObj()
 		self.globeStripObjs:insert(GLSceneObject{
 			program = self.globeTexShader,
 			texs = {self.colorTex},
+			vertexes = {
+				data = globeVtxCPUBuf.v,
+				size = ffi.sizeof'vec3f_t' * #globeVtxCPUBuf,
+				count = #globeVtxCPUBuf,
+				dim = 3,
+			},
 			geometry = {
 				mode = gl.GL_TRIANGLE_STRIP,
-				count = 2 * (vars.idivs+1),
-			},
-			attrs = {
-				vertex = {
-					buffer = {
-						data = globeVtxCPUBuf.v,
-						size = ffi.sizeof'vec3f_t' * #globeVtxCPUBuf,
-						count = #globeVtxCPUBuf,
-					},
-				},
 			},
 		})
 	end

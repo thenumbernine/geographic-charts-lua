@@ -23,7 +23,6 @@ local chartCode = require 'geographic-charts.code'
 
 local earthtexfn = ... or 'earth-color.png'
 
-
 local App = require 'imguiapp.withorbit'()
 
 App.title = 'geographic chart demo'
@@ -119,7 +118,7 @@ void main() {
 ?>		+ weight_<?=name?> * chart_<?=name?>(vertex)
 <? end
 ?>	;
-	
+
 	//from meters to normalized coordinates
 	pos /= WGS84_a;
 
@@ -241,9 +240,7 @@ void main() {
 	self:refreshGlobeObj()
 end
 
-local weightFields = chartNames:mapi(function(name)
-	return 'weight_'..name
-end)
+local weightFields = chartNames:mapi(function(name) return 'weight_'..name end)
 
 local vars = {
 	idivs = 100,
@@ -264,41 +261,50 @@ end
 function App:refreshGlobeObj()
 	-- TODO just resize the buffers, don't rebuild them
 	-- but I'm lazy so
-	-- also webgl's indexed geom is messing up.  fuckin webgl always... works fine in gles too.
-	self.globeStripVtxCPUBufs = table()
-	self.globeStripObjs = table()
-	for j=0,vars.jdivs-1 do
-		local globeVtxCPUBuf = vector'vec3f_t'
-		self.globeStripVtxCPUBufs:insert(globeVtxCPUBuf)
+
+	local vtxs = vector'vec3f_t'
+	self.vtxs = vtxs
+	for j=0,vars.jdivs do
 		for i=0,vars.idivs do
 			local aziFrac = i/vars.idivs
 			local azimuthal = aziFrac * math.pi-- azimuthal angle
 			local latrad = .5*math.pi - azimuthal	-- latitude
 			local lat = math.deg(latrad)
 
-			local unitLonFrac = (j+1)/vars.jdivs
-			local lonFrac = unitLonFrac - .5
-			local lonrad = lonFrac * 2 * math.pi			-- longitude
-			local lon = math.deg(lonrad)
-			globeVtxCPUBuf:emplace_back()[0]:set(lat, lon, 0)
-
 			local unitLonFrac = j/vars.jdivs
 			local lonFrac = unitLonFrac - .5
 			local lonrad = lonFrac * 2 * math.pi			-- longitude
 			local lon = math.deg(lonrad)
-			globeVtxCPUBuf:emplace_back()[0]:set(lat, lon, 0)
+			vtxs:emplace_back()[0]:set(lat, lon, 0)
+		end
+	end
+
+	self.globeStripObjs = table()
+	self.allIndexes = table()
+	for j=0,vars.jdivs-1 do
+		local indexes = vector'int'
+		self.allIndexes:insert(indexes)
+		for i=0,vars.idivs do
+			indexes:emplace_back()[0] = i + (vars.idivs + 1) * j
+			indexes:emplace_back()[0] = i + (vars.idivs + 1) * (j + 1)
 		end
 		self.globeStripObjs:insert(GLSceneObject{
 			program = self.globeTexShader,
 			texs = {self.colorTex},
 			vertexes = {
-				data = globeVtxCPUBuf.v,
-				size = ffi.sizeof'vec3f_t' * #globeVtxCPUBuf,
-				count = #globeVtxCPUBuf,
+				data = vtxs.v,
+				size = ffi.sizeof(vtxs.type) * #vtxs,
+				count = #vtxs,
 				dim = 3,
 			},
 			geometry = {
 				mode = gl.GL_TRIANGLE_STRIP,
+				indexes = {
+					type = gl.GL_UNSIGNED_INT,
+					data = indexes.v,
+					size = #indexes * ffi.sizeof(indexes.type),
+					count = #indexes,
+				},
 			},
 		})
 	end
@@ -357,7 +363,7 @@ function App:update()
 			bs[2] = bs[2] + cby * w
 			bs[3] = bs[3] + cbz * w
 		end
-		
+
 		for i=1,3 do
 			bs[i] = bs[i]:normalize()
 		end

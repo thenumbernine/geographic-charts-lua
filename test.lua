@@ -279,8 +279,8 @@ function App:refreshGlobeObj()
 		end
 	end
 
-	self.globeStripObjs = table()
-	self.allIndexes = table()
+	self.allIndexes = table()		-- keep around to prevent early gc
+	local geometries = table()
 	for j=0,vars.jdivs-1 do
 		local indexes = vector'int'
 		self.allIndexes:insert(indexes)
@@ -288,26 +288,27 @@ function App:refreshGlobeObj()
 			indexes:emplace_back()[0] = i + (vars.idivs + 1) * j
 			indexes:emplace_back()[0] = i + (vars.idivs + 1) * (j + 1)
 		end
-		self.globeStripObjs:insert(GLSceneObject{
-			program = self.globeTexShader,
-			texs = {self.colorTex},
-			vertexes = {
-				data = vtxs.v,
-				size = ffi.sizeof(vtxs.type) * #vtxs,
-				count = #vtxs,
-				dim = 3,
+		geometries:insert{
+			mode = gl.GL_TRIANGLE_STRIP,
+			indexes = {
+				type = gl.GL_UNSIGNED_INT,
+				data = indexes.v,
+				size = #indexes * ffi.sizeof(indexes.type),
+				count = #indexes,
 			},
-			geometry = {
-				mode = gl.GL_TRIANGLE_STRIP,
-				indexes = {
-					type = gl.GL_UNSIGNED_INT,
-					data = indexes.v,
-					size = #indexes * ffi.sizeof(indexes.type),
-					count = #indexes,
-				},
-			},
-		})
+		}
 	end
+	self.globeStripObj = GLSceneObject{
+		program = self.globeTexShader,
+		texs = {self.colorTex},
+		vertexes = {
+			data = vtxs.v,
+			size = ffi.sizeof(vtxs.type) * #vtxs,
+			count = #vtxs,
+			dim = 3,
+		},
+		geometries = geometries,
+	}
 end
 
 local function fix3D(v)
@@ -335,9 +336,7 @@ function App:update()
 			:setParameter(gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
 	end
 	self.colorTex:unbind()
-	for _,obj in ipairs(self.globeStripObjs) do
-		obj:draw()
-	end
+	self.globeStripObj:draw()
 
 	do
 		local pickHeight = 0

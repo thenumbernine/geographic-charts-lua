@@ -263,7 +263,7 @@ function App:refreshGlobeObj()
 	-- but I'm lazy so
 
 	local vtxs = vector'vec3f_t'
-	self.vtxs = vtxs
+	self.vtxs = vtxs		-- keep around to prevent early gc
 	for j=0,vars.jdivs do
 		for i=0,vars.idivs do
 			local aziFrac = i/vars.idivs

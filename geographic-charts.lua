@@ -5,6 +5,14 @@ I use these often enough that they are going to go into a library soon enough
 
 3D charts  are z+ = north pole, x+ = prime meridian
 
+each chart has the following:
+	.chart(lat, lon, height) = returns the x,y,z for the chart's coordinates.
+		lat = [-90,90] in degrees
+		lon = [-180,180] in degrees
+		height >= 0 in meters
+		returns x,y,z in meters
+	.basis(lat, lon, height) = returns the ex,ey,ez basis for chart's coordinates
+
 
 GAAAHHH STANDARDS
 physics spherical coordinates: the longitude is φ and the latitude (starting at the north pole and going down) is θ ...
@@ -191,15 +199,17 @@ end
 
 function Chart:updateGUI()
 	local ig = require 'imgui'
-	for _,n in ipairs(self.varnames) do
-		ig.luatableInputFloat(n, self, n)
+	if self.varnames then
+		for _,n in ipairs(self.varnames) do
+			ig.luatableInputFloat(n, self, n)
+		end
 	end
 end
 
 
 local charts = {
 	(function()
-		local c = class(Chart)
+		local c = Chart:subclass()
 
 		c.name = 'WGS84'
 		c.is3D = true
@@ -251,7 +261,6 @@ local charts = {
 			)
 		end
 
-		-- returns x,y,z in meters
 		-- lat = [-90,90] in degrees
 		-- lon = [-180,180] in degrees
 		-- height >= 0 in meters
@@ -421,7 +430,7 @@ vec3 chart_WGS84(vec3 x) {
 		return c
 	end)(),
 
-	class(Chart, {
+	Chart:subclass{
 		name = 'sphere',
 		is3D = true,
 		build = function(c)
@@ -465,9 +474,9 @@ vec3 chartInv_sphere(vec3 pt) {
 				return code
 			end
 		end,
-	}),
+	},
 
-	class(Chart, {
+	Chart:subclass{
 		name = 'cylinder',
 		is3D = true,
 		build = function(c)
@@ -482,10 +491,10 @@ vec3 chartInv_sphere(vec3 pt) {
 			}
 			-- TODO c:chartInv
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Equirectangular_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Equirectangular',
 		build = function(c)
 			c:buildVars{
@@ -501,10 +510,10 @@ vec3 chartInv_sphere(vec3 pt) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Mercator_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Mercator',
 		build = function(c)
 			c:buildVars{
@@ -525,10 +534,10 @@ vec3 chartInv_sphere(vec3 pt) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Gall%E2%80%93Peters_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Gall-Peters',
 		build = function(c)
 			c:buildVars{
@@ -541,10 +550,10 @@ vec3 chartInv_sphere(vec3 pt) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Lambert_cylindrical_equal-area_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Lambert cylindrical equal-area',
 		build = function(c)
 			c:buildVars{
@@ -557,21 +566,21 @@ vec3 chartInv_sphere(vec3 pt) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	--[[
 	-- https://en.wikipedia.org/wiki/Hobo%E2%80%93Dyer_projection
 	-- ... doesn't have formulas ...
-	class(Chart, {
+	Chart:subclass{
 		name = 'Hobo-Dyer',
 		build = function(c)
 			c:buildVars
 		end,
-	}),
+	},
 	--]]
 
 	-- https://en.wikipedia.org/wiki/Azimuthal_equidistant_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Azimuthal equidistant',
 		build = function(c)
 			c:buildVars{
@@ -585,10 +594,10 @@ vec3 chartInv_sphere(vec3 pt) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Lambert_azimuthal_equal-area_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Lambert azimuthal equal-area',
 		build = function(c)
 			c:buildVars{
@@ -603,10 +612,10 @@ vec3 chartInv_sphere(vec3 pt) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	(function()
-		local c = class(Chart)
+		local c = Chart:subclass()
 
 		c.name = 'Mollweide'
 
@@ -694,7 +703,7 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 	end)(),
 
 	-- https://en.wikipedia.org/wiki/Sinusoidal_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Sinusoidal',
 		build = function(c)
 			c:buildVars{
@@ -707,10 +716,10 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Winkel_tripel_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Winkel tripel',
 		normalizeBasisNumerically = true,
 		build = function(c)
@@ -721,7 +730,7 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 
 			-- TODO move this to symmath?
 			-- so sinc has to also be defined in glsl
-			local sinc = class(require 'symmath.Function')
+			local sinc = require 'symmath.Function':subclass()
 			sinc.name = 'sinc'
 			sinc.realFunc = function(x)
 				if x == 0 then return 1 end
@@ -739,10 +748,10 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Kavrayskiy_VII_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Kavrayskiy VIII',
 		normalizeBasisNumerically = true,
 		build = function(c)
@@ -756,10 +765,10 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Wiechel_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Wiechel',
 		build = function(c)
 			c:buildVars{
@@ -776,10 +785,10 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Albers_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Albers',
 		normalizeBasisNumerically = true,
 		build = function(c)
@@ -806,10 +815,10 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 				heightvar,
 			}
 		end,
-	}),
+	},
 
 	-- https://en.wikipedia.org/wiki/Bonne_projection
-	class(Chart, {
+	Chart:subclass{
 		name = 'Bonne',
 		skipBasis = true,
 		build = function(c)
@@ -831,7 +840,7 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 		basis = function(c, lat, lon, height)
 			return vec3d(1,0,0), vec3d(0,1,0), vec3d(0,0,1)
 		end,
-	}),
+	},
 
 	--[[ TODO:
 	-- transverse Mercator ... just puts arctic at mid-top and antarctic at mid-bottom

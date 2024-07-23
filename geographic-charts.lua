@@ -20,7 +20,6 @@ and make them in which coordinates?  xyz?
 local table = require 'ext.table'
 local class = require 'ext.class'
 local math = require 'ext.math'
-local timer = require 'ext.timer'
 local vec3d = require 'vec-ffi.vec3d'
 local symmath = require 'symmath'
 local clnumber = require 'cl.obj.number'
@@ -857,12 +856,9 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 
 	--]]
 }
+charts.WGS84_a = WGS84_a
 for i=1,#charts do
 	local c = charts[i]
-	if c.build then
-		timer('building '..c.name, c.build, c)
-	end
 	charts[c.name] = c
 end
-charts.WGS84_a = WGS84_a
 return charts

@@ -16,7 +16,7 @@ local Image = require 'image'
 local vec3d = require 'vec-ffi.vec3d'
 
 
-local charts = require 'geographic-charts'
+local charts = require 'geographic-charts.buildall'
 local chartCode = require 'geographic-charts.code'
 -- TODO validate 'charts' fwd and inverse as well.
 

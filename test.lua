@@ -85,7 +85,7 @@ function App:initGL(...)
 
 	self.globeTexShader = GLProgram{
 		version = 'latest',
-		header = 'precision highp float;',
+		precision = 'best',
 		vertexCode = template([[
 <?=chartCode?>
 
@@ -191,7 +191,7 @@ glreport'here'
 	self.lineObj = GLSceneObject{
 		program = {
 			version = 'latest',
-			header = 'precision highp float;',
+			precision = 'best',
 			vertexCode = [[
 in vec3 vtx;
 in vec3 color;

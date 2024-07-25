@@ -11,7 +11,7 @@ each chart has the following:
 		lon = [-180,180] in degrees
 		height >= 0 in meters
 		returns x,y,z in meters
-	.basis(lat, lon, height) = returns the ex,ey,ez basis for chart's coordinates
+	.basis(lat, lon, height) = returns the ex,ey,ez basis for chart's coordinates ... right-handed system, equal to (d/dlat, d/dlon, -d/dheight) = (north, east, inwards) (to match the WMM basis)
 
 
 GAAAHHH STANDARDS
@@ -100,8 +100,12 @@ function Chart:buildFunc(exprOut)
 	if self.skipBasis then return end
 
 	local y = symmath.Array(table.unpack(self.exprOut))
-	self.basisExprs = table{latvar, lonvar, heightvar}:mapi(function(x)
-		return y:diff(x)()
+	self.basisExprs = table{latvar, lonvar, heightvar}:mapi(function(x,i)
+		if i == 3 then 	--x == heightvar then
+			return (-y):diff(x)()
+		else
+			return y:diff(x)()
+		end
 	end)
 	if self.normalizeBasisNumerically then
 		self.basisFunc = symmath.export.Lua:toFunc{
@@ -172,8 +176,7 @@ function Chart:chart(lat, lon, height)
 	return self.chartFunc(lat, lon, height, getfields(self, table.unpack(self.varnames)))
 end
 
--- The vectors are (d/dlat, d/dlon, d/dheight)
--- So this is going to produce a left-handed coordinate system.
+-- The vectors are (d/dlat, d/dlon, -d/dheight)
 -- Don't forget that GLSL is swapping the z-back for z-up.
 -- For a few of these (sphere, cylinder, etc) multiply the output by WGS84_a to put it in meters
 function Chart:basis(lat, lon, height)
@@ -183,7 +186,7 @@ function Chart:basis(lat, lon, height)
 		local y = (vec3d(self:chart(lat, lon+delta, height)) - vec3d(self:chart(lat, lon-delta, height))) * (1 / (2 * delta))
 		x = x:normalize()
 		y = y:normalize()
-		local z = -x:cross(y)
+		local z = x:cross(y)
 		return x,y,z
 	else
 		local x,y,z = self.basisFunc(lat, lon, height, getfields(self, table.unpack(self.varnames)))
@@ -378,7 +381,7 @@ local charts = {
 			return
 				vec3d(dphi_x, dphi_y, dphi_z),
 				vec3d(dlambda_x, dlambda_y, 0),
-				vec3d(dheight_x, dheight_y, dheight_z)
+				vec3d(-dheight_x, -dheight_y, -dheight_z)
 		end
 
 		function c:getGLSLModule()
@@ -520,7 +523,7 @@ vec3 chartInv_sphere(vec3 pt) {
 		build = function(c)
 			c:buildVars{
 				{R = math.sqrt(.5)},
-				{Miller = 1},		-- set this to 5/4 to get the Miller projection: https://en.wikipedia.org/wiki/Miller_cylindrical_projection
+				{Miller = 1},		-- set this to 4/5 to get the Miller projection: https://en.wikipedia.org/wiki/Miller_cylindrical_projection
 				{WGS84_a = WGS84_a},
 			}
 			-- TODO
@@ -531,8 +534,8 @@ vec3 chartInv_sphere(vec3 pt) {
 			local eps = 1e-2
 			c:buildFunc{
 				c.vars.WGS84_a * c.vars.R * lonradval,
-				c.vars.WGS84_a * c.vars.R * c.vars.Miller * symmath.log(
-					eps + symmath.tan((1-eps) * symmath.pi * (90 + latvar / c.vars.Miller) / 360)
+				c.vars.WGS84_a * c.vars.R / c.vars.Miller * symmath.log(
+					eps + symmath.tan((1-eps) * symmath.pi * (90 + latvar * c.vars.Miller) / 360)
 				),
 				heightvar,
 			}
@@ -659,7 +662,7 @@ vec3 chartInv_sphere(vec3 pt) {
 			return
 				vec3d(0, 1, 0),
 				vec3d(1, 0, 0),
-				vec3d(0, 0, 1)
+				vec3d(0, 0, -1)
 		end
 
 		function c:getGLSLModule()
@@ -841,7 +844,7 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 			}
 		end,
 		basis = function(c, lat, lon, height)
-			return vec3d(1,0,0), vec3d(0,1,0), vec3d(0,0,1)
+			return vec3d(0,1,0), vec3d(1,0,0), vec3d(0,0,-1)
 		end,
 	},
 

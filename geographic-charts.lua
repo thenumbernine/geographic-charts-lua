@@ -172,8 +172,10 @@ function Chart:chart(lat, lon, height)
 	return self.chartFunc(lat, lon, height, getfields(self, table.unpack(self.varnames)))
 end
 
--- TODO don't forget that GLSL is swapping the z-back for z-up
--- TODO for a few of these (sphere, cylinder, etc) multiply the output by WGS84_a to put it in meters
+-- The vectors are (d/dlat, d/dlon, d/dheight)
+-- So this is going to produce a left-handed coordinate system.
+-- Don't forget that GLSL is swapping the z-back for z-up.
+-- For a few of these (sphere, cylinder, etc) multiply the output by WGS84_a to put it in meters
 function Chart:basis(lat, lon, height)
 	if not self.basisFunc then
 		local delta = 1e-3
@@ -376,7 +378,7 @@ local charts = {
 			return
 				vec3d(dphi_x, dphi_y, dphi_z),
 				vec3d(dlambda_x, dlambda_y, 0),
-				vec3d(-dheight_x, -dheight_y, -dheight_z)
+				vec3d(dheight_x, dheight_y, dheight_z)
 		end
 
 		function c:getGLSLModule()
@@ -656,7 +658,7 @@ vec3 chartInv_sphere(vec3 pt) {
 			return
 				vec3d(0, 1, 0),
 				vec3d(1, 0, 0),
-				vec3d(0, 0, -1)
+				vec3d(0, 0, 1)
 		end
 
 		function c:getGLSLModule()

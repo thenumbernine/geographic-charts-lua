@@ -11,9 +11,15 @@ latLonHeight.z = height above sealevel, in meters
 local template = require 'template'
 local ModuleSet = require 'modules'
 
-local modules = ModuleSet()
+-- https://en.wikipedia.org/wiki/List_of_map_projections
+local table = require 'ext.table'
 
-local code = template[[
+-- make sure you :build() all charts first
+-- I haven't got detection/caching of :build() or I'd just call it in here too
+local function codeForCharts(charts)
+	local modules = ModuleSet()
+
+	local code = template[[
 //// MODULE_NAME: M_PI
 const float M_PI = <?=math.pi?>;
 
@@ -78,20 +84,16 @@ const float WGS84_a = 6378137.;		// equatorial radius
 
 ]]
 
-local symmath = require 'symmath'
-symmath.export.C.numberType = 'float'	-- hmm ... nice to be an arg ...
+	local symmath = require 'symmath'
+	symmath.export.C.numberType = 'float'	-- hmm ... nice to be an arg ...
 
-local charts = require 'geographic-charts'
+	for i,chart in ipairs(charts) do
+		code = code .. chart:getGLSLModule() .. '\n'
+	end
 
-for i,chart in ipairs(charts) do
-	code = code .. chart:getGLSLModule() .. '\n'
+	modules:addFromMarkup(code)
+
+	return modules:getCodeAndHeader(table.mapi(charts, function(c) return c:getSymbol() end):unpack())
 end
 
-modules:addFromMarkup(code)
-
-
--- https://en.wikipedia.org/wiki/List_of_map_projections
-local table = require 'ext.table'
-local allChartCode = modules:getCodeAndHeader(table.mapi(charts, function(c) return c:getSymbol() end):unpack())
-
-return allChartCode
+return codeForCharts

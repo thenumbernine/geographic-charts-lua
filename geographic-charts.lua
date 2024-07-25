@@ -520,6 +520,7 @@ vec3 chartInv_sphere(vec3 pt) {
 		build = function(c)
 			c:buildVars{
 				{R = math.sqrt(.5)},
+				{Miller = 1},		-- set this to 5/4 to get the Miller projection: https://en.wikipedia.org/wiki/Miller_cylindrical_projection
 				{WGS84_a = WGS84_a},
 			}
 			-- TODO
@@ -530,8 +531,8 @@ vec3 chartInv_sphere(vec3 pt) {
 			local eps = 1e-2
 			c:buildFunc{
 				c.vars.WGS84_a * c.vars.R * lonradval,
-				c.vars.WGS84_a * c.vars.R * symmath.log(
-					eps + symmath.tan((1-eps) * symmath.pi * (90 + latvar) / 360)
+				c.vars.WGS84_a * c.vars.R * c.vars.Miller * symmath.log(
+					eps + symmath.tan((1-eps) * symmath.pi * (90 + latvar / c.vars.Miller) / 360)
 				),
 				heightvar,
 			}

@@ -488,11 +488,11 @@ mat3 chart_WGS84_basis(vec3 latLonHeight) {
 	float dphi_cosPhi = -sinPhi;
 	float dphi_sinPhi = cosPhi;
 
-	float rCart = WGS84_a / sqrt(1 - WGS84_esq * sinPhi * sinPhi);
-	float tmp = sqrt(1 - WGS84_esq * sinPhi * sinPhi);
+	float rCart = WGS84_a / sqrt(1. - WGS84_esq * sinPhi * sinPhi);
+	float tmp = sqrt(1. - WGS84_esq * sinPhi * sinPhi);
 	float dphi_rCart = WGS84_a / (tmp * tmp * tmp) * WGS84_esq * sinPhi * dphi_sinPhi;
 
-	float rCart_over_a = 1 / sqrt(1 - WGS84_esq * sinPhi * sinPhi);
+	float rCart_over_a = 1. / sqrt(1. - WGS84_esq * sinPhi * sinPhi);
 
 	float xp = (rCart + height) * cosPhi;
 	float dphi_xp = dphi_rCart * cosPhi + (rCart + height) * dphi_cosPhi;
@@ -500,11 +500,11 @@ mat3 chart_WGS84_basis(vec3 latLonHeight) {
 
 	float xp_over_a = (rCart_over_a + height / WGS84_a) * cosPhi;
 
-	float zp = (rCart * (1 - WGS84_esq) + height) * sinPhi;
-	float dphi_zp = (dphi_rCart * (1 - WGS84_esq)) * sinPhi + (rCart * (1 - WGS84_esq) + height) * dphi_sinPhi;
+	float zp = (rCart * (1. - WGS84_esq) + height) * sinPhi;
+	float dphi_zp = (dphi_rCart * (1. - WGS84_esq)) * sinPhi + (rCart * (1. - WGS84_esq) + height) * dphi_sinPhi;
 	float dheight_zp = sinPhi;
 
-	float zp_over_a = (rCart_over_a * (1 - WGS84_esq) + height / WGS84_a) * sinPhi;
+	float zp_over_a = (rCart_over_a * (1. - WGS84_esq) + height / WGS84_a) * sinPhi;
 
 	float r2D = sqrt(xp * xp + zp * zp);
 	float dphi_r2D = (xp * dphi_xp + zp * dphi_zp) / r2D;
@@ -517,7 +517,7 @@ mat3 chart_WGS84_basis(vec3 latLonHeight) {
 	float dphi_sinPhiSph = (dphi_zp * r2D - zp * dphi_r2D) / (r2D * r2D);
 	float dheight_sinPhiSph = (dheight_zp * r2D - zp * dheight_r2D) / (r2D * r2D);
 
-	float cosPhiSph = sqrt(1 - sinPhiSph * sinPhiSph);
+	float cosPhiSph = sqrt(1. - sinPhiSph * sinPhiSph);
 	//d/du sqrt(1 - x^2) = -x/sqrt(1 - x^2) dx/du;
 	float dphi_cosPhiSph = -sinPhi / cosPhiSph * dphi_sinPhiSph;
 	float dheight_cosPhiSph = -sinPhi / cosPhiSph * dheight_sinPhiSph;

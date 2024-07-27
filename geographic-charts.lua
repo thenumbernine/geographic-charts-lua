@@ -35,7 +35,11 @@ local clnumber = require 'cl.obj.number'
 -- input
 local latvar = symmath.var'lat'
 local lonvar = symmath.var'lon'
-local heightvar = symmath.var'height'
+--local heightvar = symmath.var'height'
+--local latvar = symmath.set.RealInterval(-90, 90, true, true):var'lat'
+--local lonvar = symmath.set.RealInterval(-180, 180, true, true):var'lon'
+local heightvar = symmath.set.positiveReal:var'height'
+
 -- GLSL-specific, to accept (lat,lon,height) as a vec3
 latvar:nameForExporter('C', 'latLonHeight.x')
 lonvar:nameForExporter('C', 'latLonHeight.y')
@@ -139,8 +143,13 @@ end
 
 function Chart:getGLSLBasisBody()
 	if self.skipBasis then
-		return 'mat3(vec3(1., 0., 0.), vec3(0., 1., 0.), vec3(0., 0., 1.));'
+		return table{
+			'	vec3 ex = vec3(1., 0., 0.);',
+			'	vec3 ey = vec3(0., 1., 0.);',
+			'	vec3 ez = vec3(0., 0., 1.);',
+		}:concat'\n'
 	end
+
 	local code = table{
 		'\t'..symmath.export.C:toCode{
 			input = self.exprIn,
@@ -854,6 +863,11 @@ mat3 chart_Mollweide_basis(vec3 latLonHeight) {
 			sinc.realFunc = function(x)
 				if x == 0 then return 1 end
 				return math.sin(x) / x
+			end
+
+			function sinc:evaluateDerivative(deriv, ...)
+				local x = table.unpack(self):clone()
+				return deriv(x, ...) * (-symmath.sin(x) + x * symmath.cos(x)) / x^2
 			end
 
 			local alpha = symmath.acos(symmath.cos(latradval) * symmath.cos(lonradval / 2))

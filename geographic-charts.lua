@@ -131,10 +131,38 @@ end
 -- Be sure to define your `var:nameForExporter('C', ...)` beforehand
 -- TODO what about GLSL uniforms?  and providing default values?
 function Chart:getGLSLBody()
-	return symmath.export.C:toCode{
+	return '\t'..symmath.export.C:toCode{
 		input = self.exprIn,
 		output = self.exprOut,
+	}:gsub('\n', '\n\t')
+end
+
+function Chart:getGLSLBasisBody()
+	if self.skipBasis then
+		return 'mat3(vec3(1., 0., 0.), vec3(0., 1., 0.), vec3(0., 0., 1.));'
+	end
+	local code = table{
+		'\t'..symmath.export.C:toCode{
+			input = self.exprIn,
+			-- unwrap these for GLSL ...
+			output = {
+				self.basisExprs[1][1], self.basisExprs[1][2], self.basisExprs[1][3],
+				self.basisExprs[2][1], self.basisExprs[2][2], self.basisExprs[2][3],
+				self.basisExprs[3][1], self.basisExprs[3][2], self.basisExprs[3][3],
+			},
+		}:gsub('\n', '\n\t'),
+		'	vec3 ex = vec3(out1, out2, out3);',
+		'	vec3 ey = vec3(out4, out5, out6);',
+		'	vec3 ez = vec3(out7, out8, out9);',
 	}
+	if self.normalizeBasisNumerically then
+		code:append{
+		'	ex = normalize(ex);',
+		'	ey = normalize(ey);',
+		'	ez = normalize(ez);',
+		}
+	end
+	return code:concat'\n'
 end
 
 function Chart:getGLSLFunc()
@@ -145,6 +173,10 @@ function Chart:getGLSLFunc()
 		'vec3 '..self:getSymbol()..'(vec3 latLonHeight) {',
 		self:getGLSLBody(),
 		'	return vec3(out1, out2, out3);',
+		'}',
+		'mat3 '..self:getSymbol()..'_basis(vec3 latLonHeight) {',
+		self:getGLSLBasisBody(),
+		'	return mat3(ex, ey, ez);',
 		'}',
 	}:concat'\n'
 end
@@ -158,6 +190,10 @@ function Chart:getGLSLFunc3D()
 		'vec3 '..self:getSymbol()..'(vec3 latLonHeight) {',
 		self:getGLSLBody(),
 		'	return xformZBackToZUp(vec3(out1, out2, out3));',
+		'}',
+		'mat3 '..self:getSymbol()..'_basis(vec3 latLonHeight) {',
+		self:getGLSLBasisBody(),
+		'	return mat3(xformZBackToZUp(ex), xformZBackToZUp(ey), xformZBackToZUp(ez));',
 		'}',
 	}:concat'\n'
 end
@@ -406,10 +442,10 @@ float WGS84_calc_N(
 
 // TODO instead of making one chart depend on another, put the WGS84 constants in one place
 
-vec3 chart_WGS84(vec3 x) {
-	float lat = x.x;
-	float lon = x.y;
-	float height = x.z;
+vec3 chart_WGS84(vec3 latLonHeight) {
+	float lat = latLonHeight.x;
+	float lon = latLonHeight.y;
+	float height = latLonHeight.z;
 
 	float phi = rad(lon);		// spherical φ
 	float theta = rad(lat);		// spherical inclination angle (not azumuthal θ)
@@ -429,6 +465,77 @@ vec3 chart_WGS84(vec3 x) {
 	y = xformZBackToZUp(y);
 	return y;
 }
+
+mat3 chart_WGS84_basis(vec3 latLonHeight) {
+	float phi = rad(latLonHeight.x);
+	float lambda = rad(latLonHeight.y);
+	float height = latLonHeight.z;
+
+	float cosLambda = cos(lambda);
+	float sinLambda = sin(lambda);
+
+	float cosPhi = cos(phi);
+	float sinPhi = sin(phi);
+	float dphi_cosPhi = -sinPhi;
+	float dphi_sinPhi = cosPhi;
+
+	float rCart = WGS84_a / sqrt(1 - WGS84_esq * sinPhi * sinPhi);
+	float tmp = sqrt(1 - WGS84_esq * sinPhi * sinPhi);
+	float dphi_rCart = WGS84_a / (tmp * tmp * tmp) * WGS84_esq * sinPhi * dphi_sinPhi;
+
+	float rCart_over_a = 1 / sqrt(1 - WGS84_esq * sinPhi * sinPhi);
+
+	float xp = (rCart + height) * cosPhi;
+	float dphi_xp = dphi_rCart * cosPhi + (rCart + height) * dphi_cosPhi;
+	float dheight_xp = cosPhi;
+
+	float xp_over_a = (rCart_over_a + height / WGS84_a) * cosPhi;
+
+	float zp = (rCart * (1 - WGS84_esq) + height) * sinPhi;
+	float dphi_zp = (dphi_rCart * (1 - WGS84_esq)) * sinPhi + (rCart * (1 - WGS84_esq) + height) * dphi_sinPhi;
+	float dheight_zp = sinPhi;
+
+	float zp_over_a = (rCart_over_a * (1 - WGS84_esq) + height / WGS84_a) * sinPhi;
+
+	float r2D = sqrt(xp * xp + zp * zp);
+	float dphi_r2D = (xp * dphi_xp + zp * dphi_zp) / r2D;
+	float dheight_r2D = (xp * dheight_xp + zp * dheight_zp) / r2D;
+
+	float r2D_over_a = sqrt(xp_over_a * xp_over_a + zp_over_a * zp_over_a);
+	float dphi_r2D_over_a = (xp_over_a * dphi_xp + zp_over_a * dphi_zp) / r2D;
+
+	float sinPhiSph = zp / r2D;
+	float dphi_sinPhiSph = (dphi_zp * r2D - zp * dphi_r2D) / (r2D * r2D);
+	float dheight_sinPhiSph = (dheight_zp * r2D - zp * dheight_r2D) / (r2D * r2D);
+
+	float cosPhiSph = sqrt(1 - sinPhiSph * sinPhiSph);
+	//d/du sqrt(1 - x^2) = -x/sqrt(1 - x^2) dx/du;
+	float dphi_cosPhiSph = -sinPhi / cosPhiSph * dphi_sinPhiSph;
+	float dheight_cosPhiSph = -sinPhi / cosPhiSph * dheight_sinPhiSph;
+
+	//float x = r2D * cosPhiSph / WGS84_a * cosLambda;
+	//float y = r2D * cosPhiSph / WGS84_a * sinLambda;
+	//float z = r2D * sinPhiSph / WGS84_a;
+
+	vec3 dphi = vec3(
+		(dphi_r2D_over_a * cosPhiSph + r2D_over_a * dphi_cosPhiSph) * cosLambda,
+		(dphi_r2D_over_a * cosPhiSph + r2D_over_a * dphi_cosPhiSph) * sinLambda,
+		(dphi_r2D_over_a * sinPhiSph + r2D_over_a * dphi_sinPhiSph));
+
+	vec3 dlambda = vec3(
+		-sinLambda,
+		cosLambda,
+		0.);
+
+	vec3 dheight = vec3(
+		(dheight_r2D * cosPhiSph + r2D * dheight_cosPhiSph) * cosLambda,
+		(dheight_r2D * cosPhiSph + r2D * dheight_cosPhiSph) * sinLambda,
+		(dheight_r2D * sinPhiSph + r2D * dheight_sinPhiSph));
+
+	return mat3(dphi, dlambda, -dheight);
+
+}
+
 ]]
 		end
 
@@ -463,7 +570,6 @@ vec3 chart_WGS84(vec3 x) {
 			function c:getGLSLModule()
 				local code = c.super.getGLSLModule(self)
 				code = code .. [[
-
 
 //// MODULE_DEPENDS: xformZUpToZBack deg
 
@@ -700,6 +806,13 @@ vec3 chart_Mollweide(vec3 latLonHeight) {
 	if (!isfinite(y)) y = 0.;
 	if (!isfinite(z)) z = 0.;
 	return vec3(x, y, z);
+}
+
+mat3 chart_Mollweide_basis(vec3 latLonHeight) {
+	return mat3(
+		vec3(0., 1., 0.),
+		vec3(1., 0., 0.),
+		vec3(0., 0., -1.));
 }
 
 ]]

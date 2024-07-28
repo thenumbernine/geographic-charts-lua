@@ -1,4 +1,6 @@
 #!/usr/bin/env luajit
+local cmdline = require 'ext.cmdline'(...)
+local gl = require 'gl.setup'(cmdline.gl or 'OpenGL')
 local ffi = require 'ffi'
 local op = require 'ext.op'
 local table = require 'ext.table'
@@ -6,7 +8,6 @@ local timer = require 'ext.timer'
 local template = require 'template'
 local vec3f = require 'vec-ffi.vec3f'
 local vector = require 'ffi.cpp.vector-lua'
-local gl = require 'gl'
 local GLTex2D = require 'gl.tex2d'
 local GLProgram = require 'gl.program'
 local GLSceneObject = require 'gl.sceneobject'
@@ -21,7 +22,7 @@ local chartCode = require 'geographic-charts.code'(charts)
 -- TODO validate 'charts' fwd and inverse as well.
 
 
-local earthtexfn = ... or 'earth-color.png'
+local earthtexfn = cmdline.earthtex or 'earth-color.png'
 
 local App = require 'imguiapp.withorbit'()
 

@@ -210,7 +210,16 @@ function Chart:getGLSLFunc3D()
 		'}',
 		'mat3 '..self:getSymbol()..'_basis(vec3 latLonHeight) {',
 		self:getGLSLBasisBody(),
-		'	return mat3(xformZBackToZUp(ex), xformZBackToZUp(ey), xformZBackToZUp(ez));',
+		'	e = mat3(ex, ey, ez);',
+		'	e = transpose(e);',
+		'	e[0] = xformZBackToZUp(e[0]);',
+		'	e[1] = xformZBackToZUp(e[1]);',
+		'	e[2] = xformZBackToZUp(e[2]);',
+		--'	return mat3(xformZBackToZUp(ex), xformZBackToZUp(ey), xformZBackToZUp(ez));',
+		-- right now, for 3d, the chart coords needs to be permuted by the user
+		-- so lets force them to permute the basis as well ...
+		-- but the downside to not converting is, now you have to convert mid-summing if you are using weighted combinations of graphs ... hmm ...
+		--'	return mat3(ex, ey, ez);',
 		'}',
 	}:concat'\n'
 end

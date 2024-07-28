@@ -59,7 +59,14 @@ float sinc(float x) {
 vec3 xformZBackToZUp(vec3 pt) {
 	//convert from z-towards-user (3D) to z-up (2D)
 	pt.yz = -perp2(pt.yz);		//rotate back so pt is up
+//pt = vec3(pt.x, pt.z, -pt.y);
 	pt.xz = perp2(pt.xz);		//now rotate so prime meridian is along -z instead of +x
+//pt = vec3(-pt.z, pt.y, pt.x);
+//...combined...
+//pt = vec3(pt.y, pt.z, pt.x);
+//... with inverse ...
+//pt = vec3(pt.z, pt.x, pt.y);
+
 	return pt;
 }
 

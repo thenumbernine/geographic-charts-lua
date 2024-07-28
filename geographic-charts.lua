@@ -150,28 +150,36 @@ function Chart:getGLSLBasisBody()
 		}:concat'\n'
 	end
 
-	local code = table{
-		'\t'..symmath.export.C:toCode{
-			input = self.exprIn,
-			-- unwrap these for GLSL ...
-			output = {
-				self.basisExprs[1][1], self.basisExprs[1][2], self.basisExprs[1][3],
-				self.basisExprs[2][1], self.basisExprs[2][2], self.basisExprs[2][3],
-				self.basisExprs[3][1], self.basisExprs[3][2], self.basisExprs[3][3],
-			},
-		}:gsub('\n', '\n\t'),
-		'	vec3 ex = vec3(out1, out2, out3);',
-		'	vec3 ey = vec3(out4, out5, out6);',
-		'	vec3 ez = vec3(out7, out8, out9);',
-	}
 	if self.normalizeBasisNumerically then
-		code:append{
-		'	ex = normalize(ex);',
-		'	ey = normalize(ey);',
-		'	ez = normalize(ez);',
-		}
+		return table{
+			'\t'..symmath.export.C:toCode{
+				input = self.exprIn,
+				-- unwrap these for GLSL ...
+				output = {
+					self.basisExprs[1][1], self.basisExprs[1][2], self.basisExprs[1][3],
+					self.basisExprs[2][1], self.basisExprs[2][2], self.basisExprs[2][3],
+					self.basisExprs[3][1], self.basisExprs[3][2], self.basisExprs[3][3],
+				},
+			}:gsub('\n', '\n\t'),
+			'\tvec3 ex = normalize(vec3(out1, out2, out3));',
+			'\tvec3 ey = normalize(vec3(out4, out5, out6));',
+			'\tvec3 ez = normalize(vec3(out7, out8, out9));',
+		}:concat'\n'
+	else
+		return table{
+			'\t'..symmath.export.C:toCode{
+				input = self.exprIn,
+				output = {
+					self.basisNormExprs[1][1], self.basisNormExprs[1][2], self.basisNormExprs[1][3],
+					self.basisNormExprs[2][1], self.basisNormExprs[2][2], self.basisNormExprs[2][3],
+					self.basisNormExprs[3][1], self.basisNormExprs[3][2], self.basisNormExprs[3][3],
+				},
+			}:gsub('\n', '\n\t'),
+			'\tvec3 ex = vec3(out1, out2, out3);',
+			'\tvec3 ey = vec3(out4, out5, out6);',
+			'\tvec3 ez = vec3(out7, out8, out9);',
+		}:concat'\n'
 	end
-	return code:concat'\n'
 end
 
 function Chart:getGLSLFunc()

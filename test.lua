@@ -221,6 +221,7 @@ void main() {
 					data = self.lineCPUBuf.v,
 					size = ffi.sizeof'vec3f_t' * #self.lineCPUBuf,
 					count = #self.lineCPUBuf,
+					dim = 3,
 				},
 			},
 			color = {
@@ -233,6 +234,7 @@ void main() {
 						0,0,1,
 						0,0,1,
 					},
+					dim = 3,
 				},
 			},
 		},

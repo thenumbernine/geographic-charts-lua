@@ -27,7 +27,6 @@ local earthtexfn = cmdline.earthtex or 'earth-color.png'
 local App = require 'imguiapp.withorbit'()
 
 App.title = 'geographic chart demo'
-App.viewUseBuiltinMatrixMath = true
 App.viewDist = 1.6
 App.viewOrthoSize = 2	-- TODO assign in glapp.view
 

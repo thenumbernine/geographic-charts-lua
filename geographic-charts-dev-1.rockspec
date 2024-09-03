@@ -16,7 +16,7 @@ build = {
 	type = "builtin",
 	modules = {
 		["geographic-charts.code"] = "code.lua",
-		["geographic-charts"] = "geographic-charts.lua"
+		["geographic-charts"] = "geographic-charts.lua",
 		["geographic-charts.test"] = "test.lua",
 	}
 }

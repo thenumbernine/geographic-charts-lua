@@ -24,7 +24,7 @@ local chartCode = require 'geographic-charts.code'(charts)
 
 local earthtexfn = cmdline.earthtex or 'earth-color.png'
 
-local App = require 'imguiapp.withorbit'()
+local App = require 'imgui.appwithorbit'()
 
 App.title = 'geographic chart demo'
 App.viewDist = 1.6

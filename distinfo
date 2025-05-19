@@ -1,0 +1,23 @@
+name = "geographic-charts"
+files = {
+	["README.md"] = "geographic-charts/README.md",
+	["buildall.lua"] = "geographic-charts/buildall.lua",
+	["code.lua"] = "geographic-charts/code.lua",
+	["earth-color.png"] = "geographic-charts/earth-color.png",
+	["geographic-charts-dev-1.rockspec"] = "geographic-charts/geographic-charts-dev-1.rockspec",
+	["geographic-charts.lua"] = "geographic-charts/geographic-charts.lua",
+	["test.lua"] = "geographic-charts/test.lua",
+	["test.rua"] = "geographic-charts/test.rua",
+}
+deps = {
+	"cl",
+	"ext",
+	"ffi",
+	"gl",
+	"image",
+	"imgui",
+	"modules",
+	"symmath",
+	"template",
+	"vec-ffi",
+}

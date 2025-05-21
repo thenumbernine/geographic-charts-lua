@@ -3,6 +3,7 @@ files = {
 	["README.md"] = "geographic-charts/README.md",
 	["buildall.lua"] = "geographic-charts/buildall.lua",
 	["code.lua"] = "geographic-charts/code.lua",
+	["distinfo"] = "geographic-charts/distinfo",
 	["earth-color.png"] = "geographic-charts/earth-color.png",
 	["geographic-charts-dev-1.rockspec"] = "geographic-charts/geographic-charts-dev-1.rockspec",
 	["geographic-charts.lua"] = "geographic-charts/geographic-charts.lua",
@@ -10,7 +11,6 @@ files = {
 	["test.rua"] = "geographic-charts/test.rua",
 }
 deps = {
-	"cl",
 	"ext",
 	"ffi",
 	"gl",

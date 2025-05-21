@@ -30,7 +30,7 @@ local class = require 'ext.class'
 local math = require 'ext.math'
 local vec3d = require 'vec-ffi.vec3d'
 local symmath = require 'symmath'
-local clnumber = require 'cl.obj.number'
+local glnumber = require 'gl.number'
 
 -- input
 local latvar = symmath.var'lat'
@@ -185,7 +185,7 @@ end
 function Chart:getGLSLFunc()
 	local escname = self:getCName()
 	return self.varnames:mapi(function(k)
-		return 'const float '..escname..'_'..k..' = '..clnumber(self[k])..';'
+		return 'const float '..escname..'_'..k..' = '..glnumber(self[k])..';'
 	end):append{
 		'vec3 '..self:getSymbol()..'(vec3 latLonHeight) {',
 		self:getGLSLBody(),
@@ -202,7 +202,7 @@ end
 function Chart:getGLSLFunc3D()
 	local escname = self:getCName()
 	return self.varnames:mapi(function(k)
-		return 'const float '..escname..'_'..k..' = '..clnumber(self[k])..';'
+		return 'const float '..escname..'_'..k..' = '..glnumber(self[k])..';'
 	end):append{
 		'vec3 '..self:getSymbol()..'(vec3 latLonHeight) {',
 		self:getGLSLBody(),

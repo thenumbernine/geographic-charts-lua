@@ -1,6 +1,6 @@
 #!/usr/bin/env luajit
 local cmdline = require 'ext.cmdline'(...)
-local gl = require 'gl.setup'(cmdline.gl or 'OpenGL')
+local gl = require 'gl.setup'(cmdline.gl)
 local ffi = require 'ffi'
 local op = require 'ext.op'
 local table = require 'ext.table'

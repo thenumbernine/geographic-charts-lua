@@ -6,6 +6,7 @@ local vector = require 'ffi.cpp.vector-lua'
 local GLTex2D = require 'gl.tex2d'
 local GLProgram = require 'gl.program'
 local GLSceneObject = require 'gl.sceneobject'
+local GLGlobal = require 'gl.global'
 local glreport = require 'gl.report'
 local ig = require 'imgui'
 local Image = require 'image'
@@ -25,24 +26,17 @@ App.title = 'geographic chart demo'
 App.viewDist = 1.6
 App.viewOrthoSize = 2	-- TODO assign in glapp.view
 
--- TODO combine this, glapp/tests/info.lua, and seismographic-visualization/vis.lua, and a few others, into a consolidated gl.get function (similar to how the CL getters are already defined in the cl lua library)
-local glget = [k] do
-	local int = ffi.new'int[1]'
-	gl.glGetIntegerv(assert(gl[k]), int);
-	return int[0]
-end
-
 -- [[ Winkel tripel uses sinc ... I've got it hooked up to GLSL but not yet to Lua
-charts = table.map(charts, [c,k,t]
+charts = table.map(charts, |c,k,t|
 	type(c) == 'table' and c.name == 'Winkel tripel' ? nil
 		: (type(k) == 'number' ? (c, #t+1) : (c, k))
 )
 --]]
 
-local chartNames = table.mapi(charts, [c] c:getCName())
+local chartNames = table.mapi(charts, |c| c:getCName())
 
 local hasPointSmooth = op.safeindex(gl, 'GL_POINT_SMOOTH')
-App.initGL = [:, ...] do
+App.initGL = |:, ...| do
 	App.super.initGL(self, ...)
 	self.view.ortho = true
 	self.view.orthoSize = self.viewOrthoSize
@@ -56,12 +50,12 @@ App.initGL = [:, ...] do
 	-- and resizing takes too long (and crashes)
 	-- so just resize offline
 	local image
-	timer('loading earth texture', [] do
+	timer('loading earth texture', || do
 		image = Image(earthtexfn)
 	end)
-	local maxTextureSize = glget'GL_MAX_TEXTURE_SIZE'
+	local maxTextureSize = GLGlobal:get'GL_MAX_TEXTURE_SIZE'
 	if image.width > maxTextureSize or image.height > maxTextureSize then
-		timer('resizing', [] do
+		timer('resizing', || do
 			image = image:resize(
 				math.min(maxTextureSize, image.width),
 				math.min(maxTextureSize, image.height)
@@ -233,7 +227,7 @@ void main() {
 	self:refreshGlobeObj()
 end
 
-local weightFields = chartNames:mapi([name] 'weight_'..name)
+local weightFields = chartNames:mapi(|name| 'weight_'..name)
 
 local vars = {
 	idivs = 100,
@@ -251,7 +245,7 @@ for _,field in ipairs(weightFields) do
 	vars[field] = field == 'weight_Equirectangular' ? 1 : 0
 end
 
-App.refreshGlobeObj = [:] do
+App.refreshGlobeObj = |:| do
 	-- TODO just resize the buffers, don't rebuild them
 	-- but I'm lazy so
 
@@ -304,12 +298,12 @@ App.refreshGlobeObj = [:] do
 	}
 end
 
-local fix3D = [v] do
+local fix3D = |v| do
 	v.y, v.z = v.z, -v.y
 	v.x, v.z = -v.z, v.x
 end
 
-App.update = [:] do
+App.update = |:| do
 	gl.glClearColor(0, 0, 0, 1)
 	gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 	self.globeTexShader:use()
@@ -377,7 +371,7 @@ App.update = [:] do
 glreport'here'
 end
 
-App.updateGUI = [:] do
+App.updateGUI = |:| do
 	ig.igText'view:'
 	if ig.igButton'reset view' then
 		self.view.ortho = true
@@ -424,7 +418,7 @@ App.updateGUI = [:] do
 				if totalRest == 0 then
 					vars[field] = 0
 				else
-					vars[field] = restFrac * vars[field] / totalRest
+					vars[field] *= restFrac / totalRest
 				end
 			end
 		end

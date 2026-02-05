@@ -187,7 +187,7 @@ void main() {
 	}:useNone()
 glreport'here'
 
-	self.lineCPUBuf = vector'vec3f_t'
+	self.lineCPUBuf = vector'vec3f'
 	self.lineObj = GLSceneObject{
 		program = {
 			version = 'latest',
@@ -218,7 +218,7 @@ void main() {
 			vtx = {
 				buffer = {
 					data = self.lineCPUBuf.v,
-					size = ffi.sizeof'vec3f_t' * #self.lineCPUBuf,
+					size = ffi.sizeof'vec3f' * #self.lineCPUBuf,
 					count = #self.lineCPUBuf,
 					dim = 3,
 				},
@@ -264,7 +264,7 @@ function App:refreshGlobeObj()
 	-- TODO just resize the buffers, don't rebuild them
 	-- but I'm lazy so
 
-	local vtxs = vector'vec3f_t'
+	local vtxs = vector'vec3f'
 	self.vtxs = vtxs		-- keep around to prevent early gc
 	for j=0,vars.jdivs do
 		for i=0,vars.idivs do

@@ -11,7 +11,6 @@ local vector = require 'ffi.cpp.vector-lua'
 local GLTex2D = require 'gl.tex2d'
 local GLProgram = require 'gl.program'
 local GLSceneObject = require 'gl.sceneobject'
-local glreport = require 'gl.report'
 local ig = require 'imgui'
 local Image = require 'image'
 local vec3d = require 'vec-ffi.vec3d'
@@ -185,7 +184,6 @@ void main() {
 			colorTex = 0,
 		},
 	}:useNone()
-glreport'here'
 
 	self.lineCPUBuf = vector'vec3f'
 	self.lineObj = GLSceneObject{
@@ -383,7 +381,6 @@ function App:update()
 	end
 
 	App.super.update(self)
-glreport'here'
 end
 
 function App:updateGUI()

@@ -2,7 +2,7 @@
 local gl = require 'gl.setup'(cmdline.gl or 'OpenGL')
 local template = require 'template'
 local vec3f = require 'vec-ffi.vec3f'
-local vector = require 'ffi.cpp.vector-lua'
+local vector = require 'stl.vector-lua'
 local GLTex2D = require 'gl.tex2d'
 local GLProgram = require 'gl.program'
 local GLSceneObject = require 'gl.sceneobject'

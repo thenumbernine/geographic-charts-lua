@@ -21,6 +21,7 @@ deps = {
 	"image",
 	"imgui",
 	"modules",
+	"stl",
 	"symmath",
 	"template",
 	"vec-ffi",

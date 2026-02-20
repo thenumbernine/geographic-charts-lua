@@ -80,7 +80,7 @@ function Chart:buildVars(varkvs)
 		var:nameForExporter('C', self:getCName()..'_'..k)
 		self.vars[k] = var
 		self.varlist[i] = var
-		self[k] = v
+		self[k] = self[k] or v	-- allow local object set values to override the defaults specified in self:buildVars{...}
 	end
 end
 
